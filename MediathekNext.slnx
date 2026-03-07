@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MediathekNext.Api/MediathekNext.Api.csproj" />
+    <Project Path="src/MediathekNext.AppHost/MediathekNext.AppHost.csproj" />
+    <Project Path="src/MediathekNext.Application/MediathekNext.Application.csproj" />
+    <Project Path="src/MediathekNext.CoreWorker/MediathekNext.CoreWorker.csproj" />
+    <Project Path="src/MediathekNext.Domain/MediathekNext.Domain.csproj" />
+    <Project Path="src/MediathekNext.Infrastructure/MediathekNext.Infrastructure.csproj" />
+    <Project Path="src/MediathekNext.ServiceDefaults/MediathekNext.ServiceDefaults.csproj" />
+    <Project Path="src/MediathekNext.Worker/MediathekNext.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MediathekNext.Application.Tests/MediathekNext.Application.Tests.csproj" />
+    <Project Path="tests/MediathekNext.Domain.Tests/MediathekNext.Domain.Tests.csproj" />
+    <Project Path="tests/MediathekNext.Infrastructure.Tests/MediathekNext.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>
