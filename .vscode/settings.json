@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^git rm -r --cached src/\\*/bin/ src/\\*/obj/$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}
