@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'mediathek-api'
+    static_configs:
+      - targets: ['api:8080']
+    metrics_path: '/metrics'
+
+  - job_name: 'mediathek-frontend'
+    static_configs:
+      - targets: ['frontend:8080']
+    metrics_path: '/metrics'
+
+  - job_name: 'mediathek-worker'
+    static_configs:
+      - targets: ['worker:8080']
+    metrics_path: '/metrics'
+
+  - job_name: 'mediathek-core-worker'
+    static_configs:
+      - targets: ['core-worker:8080']
+    metrics_path: '/metrics'

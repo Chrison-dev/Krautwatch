@@ -1,0 +1,117 @@
+name: mediathek-next
+
+services:
+
+  proxy:
+    image: traefik:v3-alpine
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080" # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - mediathek
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.services.frontend.loadbalancer.server.port=8080"
+    networks:
+      - mediathek
+    depends_on:
+      - api
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=PathPrefix(`/api`)"
+      - "traefik.http.routers.api.entrypoints=web"
+      - "traefik.http.services.api.loadbalancer.server.port=8080"
+    networks:
+      - mediathek
+    depends_on:
+      - core-worker
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/worker/Dockerfile
+    environment:
+      - DOTNET_ENVIRONMENT=Production
+    volumes:
+      - downloads:/downloads
+    networks:
+      - mediathek
+    depends_on:
+      - core-worker
+    deploy:
+      replicas: 1  # scale with: docker compose up --scale worker=N
+
+  core-worker:
+    build:
+      context: .
+      dockerfile: docker/core-worker/Dockerfile
+    environment:
+      - DOTNET_ENVIRONMENT=Production
+    volumes:
+      - sqlite-data:/data
+      - downloads:/downloads
+    networks:
+      - mediathek
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - mediathek
+
+  loki:
+    image: grafana/loki:latest
+    volumes:
+      - loki-data:/loki
+    networks:
+      - mediathek
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=PathPrefix(`/grafana`)"
+      - "traefik.http.routers.grafana.entrypoints=web"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    networks:
+      - mediathek
+
+volumes:
+  sqlite-data:
+  downloads:
+  prometheus-data:
+  loki-data:
+  grafana-data:
+
+networks:
+  mediathek:
+    driver: bridge
