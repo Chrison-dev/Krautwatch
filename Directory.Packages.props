@@ -5,8 +5,10 @@
 
   <ItemGroup Label="TickerQ">
     <!-- All TickerQ packages must be the same version. 10.x targets .NET 10. -->
-    <PackageVersion Include="TickerQ.Utilities"  Version="10.1.1" />
-    <PackageVersion Include="TickerQ.Dashboard"  Version="10.1.1" />
+    <PackageVersion Include="TickerQ"                      Version="10.1.1" />
+    <PackageVersion Include="TickerQ.EntityFrameworkCore"  Version="10.1.1" />
+    <PackageVersion Include="TickerQ.Utilities"            Version="10.1.1" />
+    <PackageVersion Include="TickerQ.Dashboard"            Version="10.1.1" />
   </ItemGroup>
 
   <ItemGroup Label="WolverineFx">

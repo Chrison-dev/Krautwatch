@@ -21,6 +21,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="TickerQ" />
+    <PackageReference Include="TickerQ.EntityFrameworkCore" />
     <PackageReference Include="TickerQ.Utilities" />
     <PackageReference Include="SharpCompress" />
   </ItemGroup>
