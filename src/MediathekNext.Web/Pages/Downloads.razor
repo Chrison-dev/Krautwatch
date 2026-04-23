@@ -1,0 +1,228 @@
+@page "/downloads"
+@using MediathekNext.Web.ApiClient
+@inject MediathekApiClient Api
+@implements IAsyncDisposable
+@layout MediathekNext.Web.Layout.MainLayout
+@rendermode InteractiveServer
+
+<PageTitle>Downloads — MediathekNext</PageTitle>
+
+<div class="page-header">
+  <h1 class="page-title">Downloads</h1>
+  @if (_jobs is not null)
+  {
+    var active = _jobs.Count(j => IsActive(j.Status));
+    <p class="page-subtitle">
+      @_jobs.Count total ·
+      @if (active > 0) { <span style="color:var(--accent)">@active active</span> }
+      else             { <span>none active</span> }
+    </p>
+  }
+</div>
+
+@if (_loading)
+{
+  <div class="loading-state"><div class="spinner"></div>LOADING QUEUE…</div>
+}
+else if (_jobs is null || _jobs.Count == 0)
+{
+  <div class="empty-state">
+    <p class="empty-state-title">Queue is empty</p>
+    <p class="empty-state-sub">Browse the <a href="/">catalog</a> and start a download</p>
+  </div>
+}
+else
+{
+  <div class="queue-list">
+    @foreach (var job in _jobs)
+    {
+      <div class="queue-item">
+        <div class="queue-item-info">
+          <div class="queue-title">@job.EpisodeTitle</div>
+          <div class="queue-meta">
+            <span>@job.ShowTitle</span>
+            <span>·</span>
+            <span>@job.ChannelName</span>
+            <span>·</span>
+            <span>@job.Quality</span>
+            @if (job.StreamType is not null)
+            {
+              <span>·</span>
+              <span class="stream-type-badge">@job.StreamType</span>
+            }
+            <span>·</span>
+            <time class="tabular">@job.CreatedAt.ToLocalTime().ToString("HH:mm")</time>
+          </div>
+
+          @* Phase label — shown while active *@
+          @if (IsActive(job.Status))
+          {
+            <div class="phase-label">
+              <div class="spinner spinner--small"></div>
+              @PhaseLabel(job.Status)
+            </div>
+          }
+
+          @* Progress bar — shown during download phase and on completion *@
+          @if (ShowProgress(job.Status))
+          {
+            <div class="progress-bar-wrap">
+              <div class="progress-bar">
+                <div class="progress-fill @ProgressClass(job.Status)"
+                     style="width: @ProgressWidth(job)%"></div>
+              </div>
+              <span class="progress-val">
+                @if (job.Status == "Completed") { <span>✓</span> }
+                else if (IsFailed(job.Status))  { <span style="color:var(--text-3)">—</span> }
+                else                            { <span>@job.ProgressPercent?.ToString("F0")%</span> }
+              </span>
+            </div>
+          }
+
+          @* Error message for any failure state *@
+          @if (!string.IsNullOrEmpty(job.ErrorMessage))
+          {
+            <div class="error-detail">@job.ErrorMessage[..Math.Min(160, job.ErrorMessage.Length)]</div>
+          }
+
+          @* Output path on completion *@
+          @if (job.Status == "Completed" && job.OutputPath is not null)
+          {
+            <div class="output-path">
+              @job.OutputPath
+              @if (job.FileSizeBytes.HasValue) { <span> · @FormatBytes(job.FileSizeBytes.Value)</span> }
+            </div>
+          }
+        </div>
+
+        <div class="queue-actions">
+          <span class="status-badge status-@StatusCssClass(job.Status)">@StatusLabel(job.Status)</span>
+
+          @if (IsActive(job.Status))
+          {
+            <button class="btn btn-sm btn-danger" @onclick="() => Cancel(job.JobId)">Cancel</button>
+          }
+          else if (IsFailed(job.Status) || job.Status == "Cancelled")
+          {
+            <button class="btn btn-sm btn-ghost" @onclick="() => Retry(job.JobId)">Retry</button>
+          }
+        </div>
+      </div>
+    }
+  </div>
+}
+
+@code {
+  List<DownloadJob>? _jobs;
+  bool _loading = true;
+  PeriodicTimer? _timer;
+
+  protected override async Task OnInitializedAsync()
+  {
+    await LoadAsync();
+    _timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
+    _ = PollAsync();
+  }
+
+  async Task LoadAsync()
+  {
+    try   { _jobs = await Api.GetDownloadQueueAsync() ?? []; }
+    catch { _jobs ??= []; }
+    finally { _loading = false; }
+  }
+
+  async Task PollAsync()
+  {
+    while (_timer is not null && await _timer.WaitForNextTickAsync())
+    {
+      // Poll whenever any job is in an active state (any of the 4 active statuses)
+      if (_jobs?.Any(j => IsActive(j.Status)) == true)
+      {
+        await LoadAsync();
+        await InvokeAsync(StateHasChanged);
+      }
+    }
+  }
+
+  async Task Cancel(Guid jobId)
+  {
+    await Api.CancelDownloadAsync(jobId);
+    await LoadAsync();
+    StateHasChanged();
+  }
+
+  async Task Retry(Guid jobId)
+  {
+    await Api.RetryDownloadAsync(jobId);
+    await LoadAsync();
+    StateHasChanged();
+  }
+
+  // ── Status helpers ────────────────────────────────────────────────────────
+
+  static bool IsActive(string status) =>
+    status is "Queued" or "Resolving" or "Downloading" or "Finalising";
+
+  static bool IsFailed(string status) =>
+    status is "UrlUnavailable" or "DownloadFailed" or "FinaliseFailed";
+
+  static bool ShowProgress(string status) =>
+    status is "Downloading" or "Finalising" or "Completed" or "DownloadFailed" or "FinaliseFailed";
+
+  static string PhaseLabel(string status) => status switch
+  {
+    "Queued"     => "Waiting to start…",
+    "Resolving"  => "Verifying stream URL…",
+    "Downloading"=> "Downloading…",
+    "Finalising" => "Finalising file…",
+    _            => status
+  };
+
+  static string StatusLabel(string status) => status switch
+  {
+    "Queued"          => "Queued",
+    "Resolving"       => "Resolving",
+    "Downloading"     => "Downloading",
+    "Finalising"      => "Finalising",
+    "Completed"       => "Done",
+    "Cancelled"       => "Cancelled",
+    "UrlUnavailable"  => "URL unavailable",
+    "DownloadFailed"  => "Download failed",
+    "FinaliseFailed"  => "Finalise failed",
+    _                 => status
+  };
+
+  static string StatusCssClass(string status) => status switch
+  {
+    "Completed"                                    => "completed",
+    "Cancelled"                                    => "cancelled",
+    var s when IsFailed(s)                         => "failed",
+    var s when IsActive(s)                         => "active",
+    _                                              => "unknown"
+  };
+
+  static string ProgressClass(string status) => status switch
+  {
+    "Completed"    => "done",
+    var s when IsFailed(s) => "failed",
+    _              => ""
+  };
+
+  static string ProgressWidth(DownloadJob job) =>
+    job.Status == "Completed" ? "100"
+    : job.Status == "Finalising" ? "99"   // show near-complete while muxing
+    : job.ProgressPercent?.ToString("F0") ?? "0";
+
+  static string FormatBytes(long bytes)
+  {
+    if (bytes >= 1_073_741_824) return $"{bytes / 1_073_741_824.0:F1} GB";
+    if (bytes >= 1_048_576)     return $"{bytes / 1_048_576.0:F0} MB";
+    return $"{bytes / 1024.0:F0} KB";
+  }
+
+  public ValueTask DisposeAsync()
+  {
+    _timer?.Dispose();
+    return ValueTask.CompletedTask;
+  }
+}

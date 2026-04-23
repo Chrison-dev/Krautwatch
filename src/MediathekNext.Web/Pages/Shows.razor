@@ -1,0 +1,74 @@
+@page "/shows"
+@using MediathekNext.Web.ApiClient
+@inject MediathekApiClient Api
+@layout MediathekNext.Web.Layout.MainLayout
+@rendermode InteractiveServer
+
+<PageTitle>Shows — MediathekNext</PageTitle>
+
+<div class="page-header">
+  <h1 class="page-title">Shows</h1>
+  @if (_shows is not null)
+  { <p class="page-subtitle">@_shows.Count series across all channels</p> }
+</div>
+
+<div class="filter-bar">
+  <span class="filter-label">Channel</span>
+  @foreach (var ch in _channels)
+  {
+    <button class="pill @(ch == _channel ? "active" : "")"
+            @onclick="() => SetChannel(ch)">
+      @ch.ToUpper()
+    </button>
+  }
+</div>
+
+@if (_loading)
+{
+  <div class="loading-state"><div class="spinner"></div>LOADING SHOWS…</div>
+}
+else if (_shows is null || _shows.Count == 0)
+{
+  <div class="empty-state">
+    <p class="empty-state-title">No shows found</p>
+    <p class="empty-state-sub">The catalog may still be refreshing</p>
+  </div>
+}
+else
+{
+  <div class="show-list">
+    @foreach (var show in _shows)
+    {
+      <a class="show-row" href="/shows/@show.ShowId">
+        <div>
+          <div class="show-title-text">@show.Title</div>
+          <div class="show-channel channel-@show.ChannelId">@show.ChannelId.ToUpper()</div>
+        </div>
+        <div class="show-count">@show.EpisodeCount ep@(show.EpisodeCount == 1 ? "" : "s")</div>
+        <div class="show-date">
+          @if (show.LatestBroadcast.HasValue)
+          { <time>@show.LatestBroadcast.Value.ToString("dd.MM.yyyy")</time> }
+        </div>
+      </a>
+    }
+  </div>
+}
+
+@code {
+  static readonly string[] _channels = ["All", "ard", "zdf"];
+  string _channel = "All";
+  bool _loading = true;
+  List<ShowSummary>? _shows;
+
+  protected override async Task OnInitializedAsync() => await LoadAsync();
+
+  async Task SetChannel(string ch) { _channel = ch; await LoadAsync(); }
+
+  async Task LoadAsync()
+  {
+    _loading = true; _shows = null; StateHasChanged();
+    try { _shows = await Api.GetShowsAsync(_channel == "All" ? null : _channel) ?? []; }
+    catch { _shows = []; }
+    finally { _loading = false; }
+  }
+}

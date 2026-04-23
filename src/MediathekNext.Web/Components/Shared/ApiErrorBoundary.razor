@@ -1,0 +1,31 @@
+@inherits ErrorBoundaryBase
+
+@if (CurrentException is null)
+{
+    @ChildContent
+}
+else
+{
+    <div class="error-boundary">
+        <div class="error-boundary-icon">!</div>
+        <div class="error-boundary-body">
+            <p class="error-boundary-title">Something went wrong</p>
+            <p class="error-boundary-detail">
+                @if (CurrentException is HttpRequestException)
+                {
+                    <span>Could not reach the API. Check that the core service is running.</span>
+                }
+                else
+                {
+                    <span>@CurrentException.Message</span>
+                }
+            </p>
+            <button class="btn btn-ghost btn-sm" @onclick="Recover">Try again</button>
+        </div>
+    </div>
+}
+
+@code {
+    protected override Task OnErrorAsync(Exception exception)
+        => Task.CompletedTask;
+}

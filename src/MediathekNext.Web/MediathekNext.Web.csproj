@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\MediathekNext.ServiceDefaults\MediathekNext.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+  <!-- Blazor Server calls the API via HttpClient — no direct domain/infra references -->
+  <!-- All data access goes through MediathekApiClient → HTTP → API layer -->
+
+</Project>

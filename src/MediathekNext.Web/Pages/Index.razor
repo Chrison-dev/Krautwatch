@@ -1,0 +1,116 @@
+@page "/"
+@using MediathekNext.Web.ApiClient
+@using MediathekNext.Web.Components.Shared
+@inject MediathekApiClient Api
+@inject NavigationManager Nav
+@layout MediathekNext.Web.Layout.MainLayout
+@rendermode InteractiveServer
+
+<PageTitle>Catalog — MediathekNext</PageTitle>
+
+<div class="page-header">
+  <h1 class="page-title">Catalog</h1>
+  <p class="page-subtitle">
+    @if (_all is not null)
+    {
+      <span>Showing @_visible of @_all.Count entries</span>
+    }
+  </p>
+</div>
+
+<div class="filter-bar">
+  <span class="filter-label">Channel</span>
+  @foreach (var ch in _channels)
+  {
+    <button class="pill @(ch == _channel ? "active" : "")"
+            @onclick="() => SetChannel(ch)">
+      @ch.ToUpper()
+    </button>
+  }
+  <div class="pill-sep"></div>
+  <span class="filter-label">Type</span>
+  @foreach (var ct in _contentTypes)
+  {
+    <button class="pill @(ct == _contentType ? "active" : "")"
+            @onclick="() => SetContentType(ct)">
+      @ct
+    </button>
+  }
+</div>
+
+@if (_loading)
+{
+  <div class="loading-state">
+    <div class="spinner"></div>
+    LOADING CATALOG…
+  </div>
+}
+else if (_all is null || _all.Count == 0)
+{
+  <div class="empty-state">
+    <p class="empty-state-title">No content found</p>
+    <p class="empty-state-sub">Try a different channel or content type filter</p>
+  </div>
+}
+else
+{
+  <div class="episode-grid">
+    @foreach (var ep in _all.Take(_visible))
+    {
+      <EpisodeCard Episode="ep" OnDownloadClick="@(id => Nav.NavigateTo("/episodes/" + id))" />
+    }
+  </div>
+
+  @if (_visible < _all.Count)
+  {
+    <div style="text-align:center;padding:2rem 0">
+      <button class="btn btn-ghost" @onclick="LoadMore">
+        Load more — @(_all.Count - _visible) remaining
+      </button>
+    </div>
+  }
+}
+
+@code {
+  const int PageSize = 60;
+  static readonly string[] _channels = ["All", "ard", "zdf"];
+  static readonly string[] _contentTypes = ["All", "Episode", "Movie", "Documentary"];
+
+  string _channel = "All";
+  string _contentType = "All";
+  bool _loading = true;
+  int _visible = PageSize;
+  List<EpisodeSummary>? _all;
+
+  protected override async Task OnInitializedAsync() => await LoadAsync();
+
+  async Task SetChannel(string ch) { _channel = ch; _visible = PageSize; await LoadAsync(); }
+  async Task SetContentType(string ct) { _contentType = ct; _visible = PageSize; await LoadAsync(); }
+  void LoadMore() => _visible = Math.Min(_visible + PageSize, _all?.Count ?? 0);
+
+  async Task LoadAsync()
+  {
+    _loading = true; _all = null; StateHasChanged();
+    try
+    {
+      List<EpisodeSummary> results;
+
+      if (_channel == "All" && _contentType == "All")
+      {
+        var ard = await Api.BrowseByChannelAsync("ard") ?? [];
+        var zdf = await Api.BrowseByChannelAsync("zdf") ?? [];
+        results = [.. ard, .. zdf];
+      }
+      else if (_channel != "All" && _contentType == "All")
+        results = await Api.BrowseByChannelAsync(_channel) ?? [];
+      else if (_channel == "All" && _contentType != "All")
+        results = await Api.BrowseByContentTypeAsync(_contentType) ?? [];
+      else
+        results = await Api.BrowseByChannelAsync(_channel, _contentType) ?? [];
+
+      _all = [.. results.OrderByDescending(e => e.BroadcastDate)];
+    }
+    catch { _all = []; }
+    finally { _loading = false; }
+  }
+}

@@ -1,13 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <UserSecretsId>dotnet-MediathekNext.CoreWorker-08eedc41-a7a6-462f-a7e5-2129469a542a</UserSecretsId>
-  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\MediathekNext.Application\MediathekNext.Application.csproj" />
+    <ProjectReference Include="..\MediathekNext.Infrastructure\MediathekNext.Infrastructure.csproj" />
+    <ProjectReference Include="..\MediathekNext.ServiceDefaults\MediathekNext.ServiceDefaults.csproj" />
+  </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.1" />
+    <PackageReference Include="WolverineFx" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
   </ItemGroup>
+
+
 </Project>

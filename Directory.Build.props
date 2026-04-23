@@ -1,0 +1,16 @@
+<Project>
+  <PropertyGroup>
+    <!-- Target framework for all projects — see DR-007 -->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <LangVersion>latest</LangVersion>
+
+    <!-- Consistent assembly naming -->
+    <RootNamespace>$(MSBuildProjectName.Replace("-","_"))</RootNamespace>
+
+    <!-- Reproducible builds -->
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+</Project>

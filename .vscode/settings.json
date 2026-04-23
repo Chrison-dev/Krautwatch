@@ -3,6 +3,8 @@
         "/^git rm -r --cached src/\\*/bin/ src/\\*/obj/$/": {
             "approve": true,
             "matchCommandLine": true
-        }
+        },
+        "dotnet build": true,
+        "dotnet restore": true
     }
 }

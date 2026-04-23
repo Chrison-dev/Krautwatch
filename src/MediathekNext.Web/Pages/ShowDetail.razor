@@ -1,0 +1,71 @@
+@page "/shows/{ShowId}"
+@using MediathekNext.Web.ApiClient
+@using MediathekNext.Web.Components.Shared
+@inject MediathekApiClient Api
+@inject NavigationManager Nav
+@layout MediathekNext.Web.Layout.MainLayout
+@rendermode InteractiveServer
+
+<PageTitle>@(_showTitle ?? "Show") — MediathekNext</PageTitle>
+
+@if (_loading)
+{
+  <div class="loading-state"><div class="spinner"></div>LOADING…</div>
+}
+else if (_episodes is null || _episodes.Count == 0)
+{
+  <div class="empty-state">
+    <p class="empty-state-title">No episodes found</p>
+    <p class="empty-state-sub"><a href="/shows">Back to shows</a></p>
+  </div>
+}
+else
+{
+  <div class="breadcrumb">
+    <a href="/">Catalog</a>
+    <span class="breadcrumb-sep">/</span>
+    <a href="/shows">Shows</a>
+    <span class="breadcrumb-sep">/</span>
+    <span>@_showTitle</span>
+  </div>
+
+  <div class="page-header">
+    <p class="page-subtitle">
+      <span class="channel-badge channel-@_channelId">@_channelId?.ToUpper()</span>
+      &nbsp;·&nbsp;
+      @_episodes.Count episode@(_episodes.Count == 1 ? "" : "s")
+    </p>
+    <h1 class="page-title">@_showTitle</h1>
+  </div>
+
+  <div class="episode-grid">
+    @foreach (var ep in _episodes)
+    {
+      <EpisodeCard Episode="ep" OnDownloadClick="@(id => Nav.NavigateTo("/episodes/" + id))" />
+    }
+  </div>
+}
+
+@code {
+  [Parameter] public string ShowId { get; set; } = "";
+
+  bool _loading = true;
+  List<EpisodeSummary>? _episodes;
+  string? _showTitle;
+  string? _channelId;
+
+  protected override async Task OnInitializedAsync()
+  {
+    try
+    {
+      _episodes = await Api.GetShowEpisodesAsync(ShowId) ?? [];
+      if (_episodes.Count > 0)
+      {
+        _showTitle = _episodes[0].ShowTitle;
+        _channelId = _episodes[0].ChannelId;
+      }
+    }
+    catch { _episodes = []; }
+    finally { _loading = false; }
+  }
+}

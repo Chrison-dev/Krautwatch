@@ -32,3 +32,27 @@
 - Shows title, description, channel, broadcast date, duration, available quality levels
 - Clear "Download" call-to-action per quality option
 - Shows availability expiry if known
+
+---
+
+## US-007 · Browse by Show
+
+> As a user, I want to see all episodes of a specific show so I can watch a series in order or find a missed episode.
+
+**Acceptance Criteria:**
+- Clicking a show title lists all available episodes for that show
+- Episodes ordered by broadcast date descending
+- Shows episode count and date range
+- Works for series (Tatort), news (Tagesschau), and documentary series alike
+
+---
+
+## US-008 · Browse by Content Type
+
+> As a user, I want to filter the catalog by content type (Movies, Series, Documentaries) so I can find the kind of content I'm in the mood for.
+
+**Acceptance Criteria:**
+- Four content type filters: Movies, Series/Episodes, Documentaries
+- ContentType is visible on every catalog card
+- Filters can be combined with channel filter and search
+- "Movies" surfaces standalone films, not series episodes

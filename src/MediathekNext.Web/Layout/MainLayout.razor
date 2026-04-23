@@ -1,0 +1,53 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Nav
+@using Microsoft.AspNetCore.Components.Routing
+
+<div class="app-shell">
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="/" class="site-logo">Mediathek<span>Next</span></a>
+
+      <nav class="main-nav">
+        <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
+          <span>Catalog</span>
+        </NavLink>
+        <NavLink class="nav-link" href="/shows">
+          <span>Shows</span>
+        </NavLink>
+        <NavLink class="nav-link" href="/downloads">
+          <span>Downloads</span>
+        </NavLink>
+        <NavLink class="nav-link" href="/settings">
+          <span>Settings</span>
+        </NavLink>
+      </nav>
+
+      <div class="nav-right">
+        <form class="search-form" @onsubmit="Search" @onsubmit:preventDefault>
+          <input class="search-input"
+                 type="search"
+                 placeholder="Search..."
+                 @bind="_searchQuery"
+                 @bind:event="oninput" />
+          <button class="search-btn" type="submit">⌕</button>
+        </form>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <ApiErrorBoundary>
+      @Body
+    </ApiErrorBoundary>
+  </main>
+</div>
+
+@code {
+  string _searchQuery = "";
+
+  void Search()
+  {
+    if (!string.IsNullOrWhiteSpace(_searchQuery))
+      Nav.NavigateTo($"/search?q={Uri.EscapeDataString(_searchQuery.Trim())}");
+  }
+}

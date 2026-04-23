@@ -1,0 +1,122 @@
+@page "/episodes/{EpisodeId}"
+@using MediathekNext.Web.ApiClient
+@inject MediathekApiClient Api
+@layout MediathekNext.Web.Layout.MainLayout
+@rendermode InteractiveServer
+
+<PageTitle>@(_episode?.EpisodeTitle ?? "Episode") — MediathekNext</PageTitle>
+
+@if (_loading)
+{
+  <div class="loading-state"><div class="spinner"></div>LOADING…</div>
+}
+else if (_episode is null)
+{
+  <div class="empty-state">
+    <p class="empty-state-title">Episode not found</p>
+    <p class="empty-state-sub"><a href="/">Back to catalog</a></p>
+  </div>
+}
+else
+{
+  <div class="breadcrumb">
+    <a href="/">Catalog</a>
+    <span class="breadcrumb-sep">/</span>
+    <a href="/shows">@_episode.ShowTitle</a>
+    <span class="breadcrumb-sep">/</span>
+    <span>@_episode.EpisodeTitle</span>
+  </div>
+
+  <div class="page-header">
+    <p class="page-subtitle">
+      <span class="channel-badge channel-@_episode.ChannelId">@_episode.ChannelId.ToUpper()</span>
+      &nbsp;
+      <time>@_episode.BroadcastDate.ToString("dd.MM.yyyy, HH:mm")</time>
+      &nbsp;·&nbsp;
+      @FormatDuration(_episode.Duration)
+    </p>
+    <h1 class="page-title">@_episode.EpisodeTitle</h1>
+  </div>
+
+  <div class="detail-panel">
+    <div>
+      @if (!string.IsNullOrWhiteSpace(_episode.Description))
+      {
+        <p class="detail-description">@_episode.Description</p>
+      }
+
+      <div class="rule"></div>
+
+      
+    </div>
+
+    <div>
+      <p style="font-size:0.6875rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-3);margin-bottom:0.5rem;">
+        Available streams
+      </p>
+
+      @if (_episode.Streams.Count == 0)
+      {
+        <p style="font-size:0.75rem;color:var(--text-3)">No streams available</p>
+      }
+      else
+      {
+        <div class="stream-list">
+          @foreach (var stream in _episode.Streams.OrderBy(s => s.Quality))
+          {
+            <div class="stream-item">
+              <div>
+                <div class="stream-quality">@stream.Quality</div>
+                <div class="stream-format">@stream.Format</div>
+              </div>
+              <button class="btn-download @(_queued.Contains(stream.StreamId) ? "" : "")"
+                      disabled="@_queued.Contains(stream.StreamId)"
+                      @onclick="() => Download(stream.StreamId)">
+                @if (_queued.Contains(stream.StreamId))
+                { <span>Queued</span> }
+                else
+                { <span>↓ Download</span> }
+              </button>
+            </div>
+          }
+        </div>
+
+        @if (!string.IsNullOrEmpty(_toast))
+        {
+          <div style="margin-top:0.75rem;font-size:0.75rem;color:var(--green)">@_toast</div>
+        }
+      }
+    </div>
+  </div>
+}
+
+@code {
+  [Parameter] public string EpisodeId { get; set; } = "";
+
+  MediathekNext.Web.ApiClient.EpisodeDetail? _episode;
+  bool _loading = true;
+  HashSet<string> _queued = [];
+  string _toast = "";
+
+  protected override async Task OnInitializedAsync()
+  {
+    try { _episode = await Api.GetEpisodeDetailAsync(EpisodeId); }
+    catch { }
+    finally { _loading = false; }
+  }
+
+  async Task Download(string streamId)
+  {
+    _queued.Add(streamId);
+    _toast = "";
+    try
+    {
+      var job = await Api.StartDownloadAsync(new StartDownloadRequest(EpisodeId, streamId));
+      _toast = job is not null ? "✓ Added to queue" : "Failed to queue download";
+    }
+    catch { _toast = "Error starting download"; _queued.Remove(streamId); }
+  }
+
+  static string FormatDuration(TimeSpan d) =>
+    d.TotalHours >= 1 ? $"{(int)d.TotalHours}h {d.Minutes:D2}m" : $"{d.Minutes}m";
+}

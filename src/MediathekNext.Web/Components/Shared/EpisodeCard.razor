@@ -1,0 +1,59 @@
+@using MediathekNext.Web.ApiClient
+@inject MediathekApiClient Api
+@inject NavigationManager Nav
+
+<div class="episode-card" @onclick="NavigateToDetail">
+  <div class="card-meta">
+    <span class="channel-badge channel-@Episode.ChannelId">@Episode.ChannelId.ToUpper()</span>
+    <span class="content-type-dot dot-@Episode.ContentType.ToLower()"></span>
+    <span>@Episode.ContentType</span>
+    <span style="margin-left:auto">
+      <time class="tabular">@Episode.BroadcastDate.ToString("dd.MM.yyyy")</time>
+    </span>
+  </div>
+
+  <div class="card-show">@Episode.ShowTitle</div>
+  <div class="card-title">@Episode.EpisodeTitle</div>
+
+  <div class="card-footer">
+    <span class="card-duration">@FormatDuration(Episode.Duration)</span>
+    @if (Episode.HasStreams)
+    {
+      @if (_state == CardState.Idle)
+      {
+        <button class="btn-download"
+                @onclick:stopPropagation
+                @onclick="OpenDetail">
+          ↓ Download
+        </button>
+      }
+      else if (_state == CardState.Queued)
+      {
+        <span style="font-size:0.6875rem;color:var(--green)">✓ Queued</span>
+      }
+      else if (_state == CardState.Error)
+      {
+        <span style="font-size:0.6875rem;color:var(--accent)">Error</span>
+      }
+    }
+  </div>
+</div>
+
+@code {
+  [Parameter, EditorRequired] public EpisodeSummary Episode { get; set; } = default!;
+  [Parameter] public EventCallback<string> OnDownloadClick { get; set; }
+
+  enum CardState { Idle, Queued, Error }
+  CardState _state = CardState.Idle;
+
+  // Navigate to episode detail for quality selection
+  void OpenDetail() => Nav.NavigateTo($"/episodes/{Episode.EpisodeId}");
+  void NavigateToDetail() => Nav.NavigateTo($"/episodes/{Episode.EpisodeId}");
+
+  static string FormatDuration(TimeSpan d) =>
+    d.TotalHours >= 1
+      ? $"{(int)d.TotalHours}h {d.Minutes:D2}m"
+      : d.TotalMinutes >= 1
+        ? $"{d.Minutes}m"
+        : "—";
+}

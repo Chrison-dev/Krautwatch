@@ -1,109 +1,164 @@
-name: mediathek-next
+# MediathekNext — Docker Compose
+#
+# Three deployment patterns:
+#
+#   1. Standalone (default, single-machine):
+#        docker compose up standalone
+#
+#   2. Scaled-out (core + N workers):
+#        docker compose up core worker
+#        docker compose up core --scale worker=3
+#
+#   3. Full stack with observability:
+#        docker compose --profile observability up core worker
 
+version: "3.9"
+
+x-worker-base: &worker-base
+  build:
+    context: .
+    dockerfile: docker/worker/Dockerfile
+  restart: unless-stopped
+  networks:
+    - mediathek
+
+# ──────────────────────────────────────────────────────────────
+# Standalone — everything in one container
+# ──────────────────────────────────────────────────────────────
 services:
-
-  proxy:
-    image: traefik:v3-alpine
-    command:
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-    ports:
-      - "80:80"
-      - "8080:8080" # Traefik dashboard
+  standalone:
+    <<: *worker-base
+    environment:
+      MEDIATHEK_ROLE: standalone
+      Database__Provider: sqlite
+      Database__ConnectionString: "Data Source=/data/mediathek.db"
+      TickerQ__Dashboard__Username: admin
+      TickerQ__Dashboard__Password: changeme   # CHANGE THIS before exposing externally
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks:
-      - mediathek
+      - sqlite-data:/data
+      - downloads:/downloads
+    ports:
+      - "8080:8080"
+    profiles:
+      - standalone
 
+# ──────────────────────────────────────────────────────────────
+# Core — DB owner + catalog refresh + API
+# ──────────────────────────────────────────────────────────────
+  core:
+    <<: *worker-base
+    environment:
+      MEDIATHEK_ROLE: core
+      Database__Provider: sqlite
+      Database__ConnectionString: "Data Source=/data/mediathek.db"
+      TickerQ__Dashboard__Username: admin
+      TickerQ__Dashboard__Password: changeme   # CHANGE THIS before exposing externally
+    volumes:
+      - sqlite-data:/data
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - distributed
+
+# ──────────────────────────────────────────────────────────────
+# Worker — download executor, scalable
+# docker compose up --scale worker=3
+# ──────────────────────────────────────────────────────────────
+  worker:
+    <<: *worker-base
+    environment:
+      MEDIATHEK_ROLE: worker
+      Database__Provider: sqlite
+      Database__ConnectionString: "Data Source=/data/mediathek.db"
+      Downloads__MaxConcurrent: 2
+    volumes:
+      - sqlite-data:/data      # read/write DownloadJobs only
+      - downloads:/downloads
+    depends_on:
+      core:
+        condition: service_healthy
+    profiles:
+      - distributed
+
+# ──────────────────────────────────────────────────────────────
+# Web frontend — Blazor Server
+# ──────────────────────────────────────────────────────────────
   frontend:
     build:
       context: .
       dockerfile: docker/frontend/Dockerfile
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
-      - "traefik.http.routers.frontend.entrypoints=web"
-      - "traefik.http.services.frontend.loadbalancer.server.port=8080"
+    restart: unless-stopped
+    environment:
+      ApiBaseUrl: "http://core:8080"
+    ports:
+      - "80:8080"
+    depends_on:
+      core:
+        condition: service_healthy
     networks:
       - mediathek
-    depends_on:
-      - api
+    profiles:
+      - distributed
 
-  api:
+  frontend-standalone:
     build:
       context: .
-      dockerfile: docker/api/Dockerfile
+      dockerfile: docker/frontend/Dockerfile
+    restart: unless-stopped
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=http://+:8080
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=PathPrefix(`/api`)"
-      - "traefik.http.routers.api.entrypoints=web"
-      - "traefik.http.services.api.loadbalancer.server.port=8080"
-    networks:
-      - mediathek
+      ApiBaseUrl: "http://standalone:8080"
+    ports:
+      - "80:8080"
     depends_on:
-      - core-worker
-
-  worker:
-    build:
-      context: .
-      dockerfile: docker/worker/Dockerfile
-    environment:
-      - DOTNET_ENVIRONMENT=Production
-    volumes:
-      - downloads:/downloads
+      - standalone
     networks:
       - mediathek
-    depends_on:
-      - core-worker
-    deploy:
-      replicas: 1  # scale with: docker compose up --scale worker=N
+    profiles:
+      - standalone
 
-  core-worker:
-    build:
-      context: .
-      dockerfile: docker/core-worker/Dockerfile
-    environment:
-      - DOTNET_ENVIRONMENT=Production
-    volumes:
-      - sqlite-data:/data
-      - downloads:/downloads
-    networks:
-      - mediathek
-
+# ──────────────────────────────────────────────────────────────
+# Observability stack (opt-in: --profile observability)
+# ──────────────────────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:latest
+    restart: unless-stopped
     volumes:
       - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     networks:
       - mediathek
+    profiles:
+      - observability
 
   loki:
     image: grafana/loki:latest
+    restart: unless-stopped
     volumes:
       - loki-data:/loki
     networks:
       - mediathek
+    profiles:
+      - observability
 
   grafana:
     image: grafana/grafana:latest
+    restart: unless-stopped
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
     volumes:
       - grafana-data:/var/lib/grafana
       - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.grafana.rule=PathPrefix(`/grafana`)"
-      - "traefik.http.routers.grafana.entrypoints=web"
-      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    ports:
+      - "3000:3000"
     networks:
       - mediathek
+    profiles:
+      - observability
 
 volumes:
   sqlite-data:

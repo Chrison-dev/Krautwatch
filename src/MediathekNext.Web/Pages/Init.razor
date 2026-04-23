@@ -1,0 +1,158 @@
+@page "/init"
+@using MediathekNext.Web.ApiClient
+@inject MediathekApiClient Api
+@inject NavigationManager Nav
+@layout MediathekNext.Web.Layout.MainLayout
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+
+<PageTitle>Initialising — MediathekNext</PageTitle>
+
+<div class="init-screen">
+
+  <div class="init-header">
+    <div class="init-logo">
+      <span class="init-logo-m">M</span>
+    </div>
+    <h1 class="init-title">MediathekNext</h1>
+    <p class="init-subtitle">Setting up your catalog</p>
+  </div>
+
+  @if (_status is null)
+  {
+    <div class="init-connecting">
+      <div class="spinner"></div>
+      <span>Connecting to API…</span>
+    </div>
+  }
+  else
+  {
+    <div class="init-steps">
+      @foreach (var step in _status.Steps)
+      {
+        <div class="init-step init-step--@step.Status">
+          <div class="init-step-icon">
+            @switch (step.Status)
+            {
+              case "complete":  <span>✓</span>; break;
+              case "failed":    <span>✗</span>; break;
+              case "in_progress": <div class="spinner spinner--small"></div>; break;
+              default:          <span class="init-step-dot"></span>; break;
+            }
+          </div>
+          <div class="init-step-body">
+            <div class="init-step-name">@step.Name</div>
+            @if (!string.IsNullOrEmpty(step.Detail))
+            {
+              <div class="init-step-detail">@step.Detail</div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+
+    @if (!string.IsNullOrEmpty(_status.CurrentTask))
+    {
+      <div class="init-current-task">
+        <div class="spinner spinner--small"></div>
+        <span>@_status.CurrentTask</span>
+      </div>
+    }
+
+    @if (_status.State == "ready")
+    {
+      <div class="init-ready">
+        <div class="init-ready-count">
+          @_status.CatalogEntryCount.ToString("N0") episodes loaded
+        </div>
+        @if (_status.LastRefreshedAt.HasValue)
+        {
+          <div class="init-ready-time">
+            Last refreshed @_status.LastRefreshedAt.Value.ToLocalTime().ToString("HH:mm:ss")
+          </div>
+        }
+        <div class="init-ready-redirect">
+          Redirecting to catalog…
+        </div>
+      </div>
+    }
+
+    @if (_status.State == "error")
+    {
+      <div class="init-error">
+        <p class="init-error-title">Initialisation error</p>
+        <p class="init-error-detail">@_status.ErrorMessage</p>
+        <p class="init-error-hint">The service will retry automatically. Check core-worker logs for details.</p>
+      </div>
+    }
+
+    @if (_status.CatalogEntryCount > 0 && _status.State != "ready")
+    {
+      <div class="init-bypass">
+        Catalog has @_status.CatalogEntryCount.ToString("N0") entries from a previous run.
+        <a href="/">Enter app now</a>
+      </div>
+    }
+  }
+
+  <div class="init-footer">
+    @if (_status?.State == "ready")
+    {
+      <a href="/" class="btn btn-primary">Enter app</a>
+    }
+    else if (_status?.State != null)
+    {
+      <a href="/" class="btn btn-ghost">Skip — enter app anyway</a>
+    }
+  </div>
+
+</div>
+
+@code {
+  SystemStatusResponse? _status;
+  PeriodicTimer? _timer;
+  bool _redirecting;
+
+  protected override async Task OnInitializedAsync()
+  {
+    await PollAsync();
+
+    if (_status?.State != "ready")
+      _ = StartPollingAsync();
+  }
+
+  async Task StartPollingAsync()
+  {
+    _timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+    while (await _timer.WaitForNextTickAsync())
+    {
+      await PollAsync();
+      if (_status?.State == "ready" && !_redirecting)
+      {
+        _redirecting = true;
+        await Task.Delay(1200); // brief pause so user sees "ready" state
+        Nav.NavigateTo("/");
+        return;
+      }
+    }
+  }
+
+  async Task PollAsync()
+  {
+    try
+    {
+      _status = await Api.GetSystemStatusAsync();
+      StateHasChanged();
+    }
+    catch
+    {
+      // API not yet reachable — keep polling
+    }
+  }
+
+  public async ValueTask DisposeAsync()
+  {
+    _timer?.Dispose();
+    await Task.CompletedTask;
+  }
+}

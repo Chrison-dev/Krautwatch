@@ -1,0 +1,68 @@
+@page "/search"
+@using MediathekNext.Web.ApiClient
+@using MediathekNext.Web.Components.Shared
+@inject MediathekApiClient Api
+@inject NavigationManager Nav
+@layout MediathekNext.Web.Layout.MainLayout
+@rendermode InteractiveServer
+
+<PageTitle>Search — MediathekNext</PageTitle>
+
+<div class="page-header">
+  <h1 class="page-title">
+    @if (!string.IsNullOrWhiteSpace(Query))
+    { <span>Results for <em>@Query</em></span> }
+    else
+    { <span>Search</span> }
+  </h1>
+  @if (_episodes is not null)
+  {
+    <p class="page-subtitle">@_episodes.Count result@(_episodes.Count == 1 ? "" : "s")</p>
+  }
+</div>
+
+@if (_loading)
+{
+  <div class="loading-state"><div class="spinner"></div>SEARCHING…</div>
+}
+else if (string.IsNullOrWhiteSpace(Query))
+{
+  <div class="empty-state">
+    <p class="empty-state-title">Type something to search</p>
+    <p class="empty-state-sub">Use the search bar above</p>
+  </div>
+}
+else if (_episodes is null || _episodes.Count == 0)
+{
+  <div class="empty-state">
+    <p class="empty-state-title">Nothing found</p>
+    <p class="empty-state-sub">No results for <em>@Query</em> — try a different term</p>
+  </div>
+}
+else
+{
+  <div class="episode-grid">
+    @foreach (var ep in _episodes)
+    {
+      <EpisodeCard Episode="ep" OnDownloadClick="@(id => Nav.NavigateTo("/episodes/" + id))" />
+    }
+  </div>
+}
+
+@code {
+  [SupplyParameterFromQuery] public string? Query { get; set; }
+
+  bool _loading = false;
+  List<EpisodeSummary>? _episodes;
+
+  protected override async Task OnParametersSetAsync()
+  {
+    if (string.IsNullOrWhiteSpace(Query)) return;
+    _loading = true;
+    _episodes = null;
+    StateHasChanged();
+    try { _episodes = await Api.SearchAsync(Query); }
+    catch { _episodes = []; }
+    finally { _loading = false; }
+  }
+}

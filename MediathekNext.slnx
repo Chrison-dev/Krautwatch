@@ -7,6 +7,7 @@
     <Project Path="src/MediathekNext.Domain/MediathekNext.Domain.csproj" />
     <Project Path="src/MediathekNext.Infrastructure/MediathekNext.Infrastructure.csproj" />
     <Project Path="src/MediathekNext.ServiceDefaults/MediathekNext.ServiceDefaults.csproj" />
+    <Project Path="src/MediathekNext.Web/MediathekNext.Web.csproj" />
     <Project Path="src/MediathekNext.Worker/MediathekNext.Worker.csproj" />
   </Folder>
   <Folder Name="/tests/">
