@@ -5,7 +5,8 @@
       "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development"
+        "DOTNET_ENVIRONMENT": "Development",
+        "DOTNET_ASPIRE_DASHBOARD_ENABLED": "false"
       },
       "dotnetRunMessages": true,
       "applicationUrl": "http://localhost:15000"
