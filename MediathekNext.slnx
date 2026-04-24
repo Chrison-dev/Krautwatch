@@ -14,5 +14,6 @@
     <Project Path="tests/MediathekNext.Application.Tests/MediathekNext.Application.Tests.csproj" />
     <Project Path="tests/MediathekNext.Domain.Tests/MediathekNext.Domain.Tests.csproj" />
     <Project Path="tests/MediathekNext.Infrastructure.Tests/MediathekNext.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Playground/Playground.csproj" />
   </Folder>
 </Solution>
