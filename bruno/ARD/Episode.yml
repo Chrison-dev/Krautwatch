@@ -1,0 +1,21 @@
+info:
+  name: Episode
+  type: http
+
+http:
+  method: GET
+  url: https://api.ardmediathek.de/page-gateway/pages/ard/item/Y3JpZDovL3RhZ2Vzc2NoYXUuZGUvNDMzYjIwNjMtZTA4ZC00OTZkLTg0N2UtY2QwMGRlNTk5OWU0LVNFTkRVTkdTVklERU8?embedded=true&mcV6=true
+  params:
+    - name: embedded
+      value: "true"
+      type: query
+    - name: mcV6
+      value: "true"
+      type: query
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

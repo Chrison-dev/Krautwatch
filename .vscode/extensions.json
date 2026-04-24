@@ -1,5 +1,20 @@
 {
     "recommendations": [
-        "qwtel.sqlite-viewer"
+        "qwtel.sqlite-viewer",
+        "ms-dotnettools.vscode-dotnet-runtime",
+        "microsoft-aspire.aspire-vscode",
+        "ms-dotnettools.csharp",
+        "ms-dotnettools.csdevkit",
+        "ms-azuretools.vscode-containers",
+        "ryanluker.vscode-coverage-gutters",
+        "richardwillis.vscode-entity-framework",
+        "bierner.github-markdown-preview",
+        "github.vscode-pull-request-github",
+        "bierner.markdown-checkbox",
+        "bierner.markdown-preview-github-styles",
+        "bierner.markdown-mermaid",
+        "ms-vscode.powershell",
+        "redhat.vscode-xml",
+        "redhat.vscode-yaml"
     ]
 }

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Mediathek.Models;
@@ -15,75 +16,88 @@ namespace Mediathek.Crawlers.Ard;
 /// </summary>
 public class ArdCrawler(HttpClient http, ILogger<ArdCrawler> log)
 {
+    private const int Parallelism = 10;
+
     // ── Entry points ──────────────────────────────────────────────────────────
 
     public async IAsyncEnumerable<CrawlResult> CrawlFullAsync(
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
-        // Step 1: Get topic compilation URLs for every client
-        var compilationUrls = new HashSet<string>();
-        foreach (var client in ArdConstants.TopicClients)
+        // Step 1: Get topic compilation URLs for every client (parallel)
+        var compilationUrls = new ConcurrentDictionary<string, byte>();
+        await Parallel.ForEachAsync(ArdConstants.TopicClients, Opts(ct), async (client, token) =>
         {
             var topicsUrl = string.Format(ArdConstants.TopicsUrl, client);
-            var json      = await GetAsync(topicsUrl, ct);
-            if (json is null) continue;
+            var json      = await GetAsync(topicsUrl, token);
+            if (json is null) return;
 
             var urls = ArdParser.ParseTopicsPage(json.Value, client);
-            foreach (var u in urls) compilationUrls.Add(u);
+            foreach (var u in urls) compilationUrls.TryAdd(u, 0);
             log.LogDebug("ARD: {Client} -> {Count} compilation URLs", client, urls.Count);
-        }
+        });
         log.LogInformation("ARD: {Count} compilation URLs total", compilationUrls.Count);
 
-        // Step 2: Each compilation URL -> item IDs
-        var itemIds = new HashSet<string>();
-        foreach (var compilationUrl in compilationUrls)
+        // Step 2: Each compilation URL -> item IDs (parallel)
+        var itemIds = new ConcurrentDictionary<string, byte>();
+        await Parallel.ForEachAsync(compilationUrls.Keys, Opts(ct), async (compilationUrl, token) =>
         {
-            await foreach (var id in FetchCompilationItemIdsAsync(compilationUrl, ct))
-                itemIds.Add(id);
-        }
+            await foreach (var id in FetchCompilationItemIdsAsync(compilationUrl, token))
+                itemIds.TryAdd(id, 0);
+        });
         log.LogInformation("ARD: {Count} item IDs from compilations", itemIds.Count);
 
-        // Step 3: Each item ID -> episode
-        foreach (var id in itemIds)
-        {
-            var result = await FetchItemAsync(id, ct);
-            if (result is not null)
-                foreach (var r in result)
-                    yield return r;
-        }
+        // Step 3: Each item ID -> episode (parallel)
+        foreach (var r in await FetchAllItemsAsync(itemIds.Keys, ct))
+            yield return r;
     }
 
     public async IAsyncEnumerable<CrawlResult> CrawlRecentAsync(
         int daysPast = 7,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
-        var itemIds = new HashSet<string>();
-
-        for (int i = 0; i < daysPast; i++)
-        {
-            var day = DateTime.Today.AddDays(-i).ToString("yyyy-MM-dd");
-
-            foreach (var client in ArdConstants.DayClients)
+        // Step 1: Parallel day-page fetches for all days × clients
+        var itemIds = new ConcurrentDictionary<string, byte>();
+        var combos  = Enumerable.Range(0, daysPast)
+            .SelectMany(i =>
             {
-                var url  = string.Format(ArdConstants.DayPageUrl, day, client);
-                var json = await GetAsync(url, ct);
-                if (json is null) continue;
+                var day = DateTime.Today.AddDays(-i).ToString("yyyy-MM-dd");
+                return ArdConstants.DayClients.Select(client => (day, client));
+            })
+            .ToList();
 
-                var ids = ArdParser.ParseDayPage(json.Value);
-                foreach (var id in ids) itemIds.Add(id);
-            }
-        }
+        await Parallel.ForEachAsync(combos, Opts(ct), async (pair, token) =>
+        {
+            var url  = string.Format(ArdConstants.DayPageUrl, pair.day, pair.client);
+            var json = await GetAsync(url, token);
+            if (json is null) return;
 
+            var ids = ArdParser.ParseDayPage(json.Value);
+            foreach (var id in ids) itemIds.TryAdd(id, 0);
+        });
         log.LogInformation("ARD: {Count} item IDs from day pages", itemIds.Count);
 
-        foreach (var id in itemIds)
-        {
-            var results = await FetchItemAsync(id, ct);
-            if (results is not null)
-                foreach (var r in results)
-                    yield return r;
-        }
+        // Step 2: Parallel item detail fetches
+        foreach (var r in await FetchAllItemsAsync(itemIds.Keys, ct))
+            yield return r;
     }
+
+    // ── Parallel item fetching ────────────────────────────────────────────────
+
+    private async Task<List<CrawlResult>> FetchAllItemsAsync(IEnumerable<string> ids, CancellationToken ct)
+    {
+        var results = new ConcurrentBag<CrawlResult>();
+        await Parallel.ForEachAsync(ids, Opts(ct), async (id, token) =>
+        {
+            var fetched = await FetchItemAsync(id, token);
+            if (fetched is not null)
+                foreach (var r in fetched)
+                    results.Add(r);
+        });
+        return [.. results];
+    }
+
+    private static ParallelOptions Opts(CancellationToken ct) =>
+        new() { MaxDegreeOfParallelism = Parallelism, CancellationToken = ct };
 
     // ── Compilation -> item IDs ───────────────────────────────────────────────
     // Compilation URL returns a page with widget items, each having an id

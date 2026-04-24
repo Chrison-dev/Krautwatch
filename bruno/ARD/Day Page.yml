@@ -1,0 +1,24 @@
+info:
+  name: Day Page
+  type: http
+
+http:
+  method: GET
+  url: https://programm-api.ard.de/program/api/program?day=2026-04-24&channelIds=daserste&mode=channel
+  params:
+    - name: day
+      value: 2026-04-24
+      type: query
+    - name: channelIds
+      value: daserste
+      type: query
+    - name: mode
+      value: channel
+      type: query
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
