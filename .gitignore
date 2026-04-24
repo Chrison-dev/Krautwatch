@@ -480,4 +480,11 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
-.claude/settings.local.json
+
+# Local-only files
+*.local.json
+
+# DB files
+*.db
+*.db-shm
+*.db-wal
