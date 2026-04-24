@@ -6,7 +6,9 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DOTNET_ENVIRONMENT": "Development",
-        "DOTNET_ASPIRE_DASHBOARD_ENABLED": "false"
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:18889",
+        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://localhost:18890",
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
       },
       "dotnetRunMessages": true,
       "applicationUrl": "http://localhost:15000"
@@ -16,7 +18,10 @@
       "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Observability",
-        "DOTNET_ENVIRONMENT": "Observability"
+        "DOTNET_ENVIRONMENT": "Observability",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:18889",
+        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://localhost:18890",
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
       },
       "dotnetRunMessages": true,
       "applicationUrl": "http://localhost:15000"
