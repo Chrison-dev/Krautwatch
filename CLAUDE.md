@@ -89,3 +89,7 @@ Roles are registered in `src/MediathekNext.Worker/Roles/`.
 ## Architecture decisions
 
 Documented in `/docs/architecture/` (DR-001 through DR-007). Read these before making structural changes — they cover decisions on the role system, job pipeline, catalog format, and database provider strategy.
+
+## Plans
+
+**Always persist a plan before executing it.** When a plan is agreed upon, write it to `/docs/plans/` using the format `YYYY-MM-DD - <title>.md` before any implementation begins. Existing plans are in `/docs/plans/`.
