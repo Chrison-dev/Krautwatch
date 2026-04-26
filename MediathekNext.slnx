@@ -4,6 +4,9 @@
     <Project Path="src/MediathekNext.AppHost/MediathekNext.AppHost.csproj" />
     <Project Path="src/MediathekNext.Application/MediathekNext.Application.csproj" />
     <Project Path="src/MediathekNext.CoreWorker/MediathekNext.CoreWorker.csproj" />
+    <Project Path="src/MediathekNext.Crawlers.Ard/MediathekNext.Crawlers.Ard.csproj" />
+    <Project Path="src/MediathekNext.Crawlers.Core/MediathekNext.Crawlers.Core.csproj" />
+    <Project Path="src/MediathekNext.Crawlers.Zdf/MediathekNext.Crawlers.Zdf.csproj" />
     <Project Path="src/MediathekNext.Domain/MediathekNext.Domain.csproj" />
     <Project Path="src/MediathekNext.Infrastructure/MediathekNext.Infrastructure.csproj" />
     <Project Path="src/MediathekNext.ServiceDefaults/MediathekNext.ServiceDefaults.csproj" />
@@ -12,6 +15,8 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MediathekNext.Application.Tests/MediathekNext.Application.Tests.csproj" />
+    <Project Path="tests/MediathekNext.Crawlers.Ard.Tests/MediathekNext.Crawlers.Ard.Tests.csproj" />
+    <Project Path="tests/MediathekNext.Crawlers.Zdf.Tests/MediathekNext.Crawlers.Zdf.Tests.csproj" />
     <Project Path="tests/MediathekNext.Domain.Tests/MediathekNext.Domain.Tests.csproj" />
     <Project Path="tests/MediathekNext.Infrastructure.Tests/MediathekNext.Infrastructure.Tests.csproj" />
     <Project Path="tests/Playground/Playground.csproj" />

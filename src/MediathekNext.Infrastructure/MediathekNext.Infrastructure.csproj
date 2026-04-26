@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MediathekNext.Domain\MediathekNext.Domain.csproj" />
+    <ProjectReference Include="..\MediathekNext.Crawlers.Core\MediathekNext.Crawlers.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup Label="EF Core — SQLite (default, always included)">
