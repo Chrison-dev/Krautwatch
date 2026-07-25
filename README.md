@@ -1,4 +1,4 @@
-# MediathekNext
+# Krautwatch
 
 Self-hosted web app to browse and download content from German public TV (ARD, ZDF).
 Built on .NET 10, Blazor Server, SQLite (swappable), and .NET Aspire.
@@ -18,7 +18,7 @@ brew install ffmpeg
 
 \`\`\`bash
 dotnet restore
-cd src/MediathekNext.AppHost
+cd src/Krautwatch.AppHost
 dotnet run
 \`\`\`
 
@@ -28,7 +28,7 @@ Aspire dashboard at **http://localhost:15000**. The app defaults to `role=standa
 
 ## Role system
 
-The same binary (`MediathekNext.Worker`) runs in three roles.
+The same binary (`Krautwatch.Worker`) runs in three roles.
 Role is resolved in priority order — first match wins:
 
 | Priority | Method | Example |
@@ -77,21 +77,21 @@ Change two config values — no code changes required:
 
 Supported providers: `sqlite` (default), `postgres`, `mssql`
 
-Uncomment the corresponding package in `MediathekNext.Worker.csproj` and `MediathekNext.Infrastructure.csproj`.
+Uncomment the corresponding package in `Krautwatch.Worker.csproj` and `Krautwatch.Infrastructure.csproj`.
 
 ---
 
 ## EF Core migrations
 
 \`\`\`bash
-cd src/MediathekNext.Worker
+cd src/Krautwatch.Worker
 
 dotnet ef migrations add <Name> \
-  --project ../MediathekNext.Infrastructure \
+  --project ../Krautwatch.Infrastructure \
   --startup-project .
 
 dotnet ef database update \
-  --project ../MediathekNext.Infrastructure \
+  --project ../Krautwatch.Infrastructure \
   --startup-project .
 \`\`\`
 

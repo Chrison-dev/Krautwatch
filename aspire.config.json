@@ -1,5 +1,5 @@
 {
     "appHost": {
-        "path": "src/MediathekNext.AppHost/MediathekNext.AppHost.csproj"
+        "path": "src/Presentation/AppHost/Krautwatch.AppHost.csproj"
     }
 }
