@@ -13,9 +13,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Per-broadcaster **crawler agents** build the catalog; the only first-party UI is **instance
   configuration** (which Sonarr/Radarr to reach back to). See DR-010.
 
-> **⚠️ Architecture reset in progress (DR-009).** The tree is being reshaped from the legacy
-> `MediathekNext.*` layout to the structure below, and renamed **MediathekNext → Krautwatch**.
-> Until that lands, some paths still read `MediathekNext.*`. Build to the target described here.
+> **⚠️ Architecture reset in progress (DR-009).** The solution has been renamed
+> **MediathekNext → Krautwatch** and reshaped into the layers below (Presentation fleet in place;
+> `CoreWorker`/`Worker` role hosts dropped). Still to come: broadcaster logic ported into
+> `Application/*` slices, the crawler/downloader **agents**, and Postgres + Wolverine wiring.
+> The superseded `docker/` topology (DR-004) is dead and will be replaced by Aspire-generated
+> compose in the distribution milestone.
 
 ## Architecture (DR-009 — read `docs/architecture/DR-009` before structural changes)
 

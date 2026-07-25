@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\ServiceDefaults\Krautwatch.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+  <!-- Blazor calls the API via HttpClient — no direct domain/infra references -->
+
+</Project>

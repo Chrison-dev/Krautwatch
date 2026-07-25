@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Domain/Krautwatch.Domain.csproj" />
+    <Project Path="src/Application/Krautwatch.Application.csproj" />
+    <Project Path="src/Infrastructure/Krautwatch.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Presentation/">
+    <Project Path="src/Presentation/AppHost/Krautwatch.AppHost.csproj" />
+    <Project Path="src/Presentation/ServiceDefaults/Krautwatch.ServiceDefaults.csproj" />
+    <Project Path="src/Presentation/Api/Krautwatch.Api.csproj" />
+    <Project Path="src/Presentation/Web/Krautwatch.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Domain.Tests/Krautwatch.Domain.Tests.csproj" />
+    <Project Path="tests/Application.Tests/Krautwatch.Application.Tests.csproj" />
+    <Project Path="tests/Infrastructure.Tests/Krautwatch.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>
