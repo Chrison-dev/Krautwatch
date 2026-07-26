@@ -19,7 +19,7 @@ else
 {
     <table>
         <thead>
-            <tr><th>Show</th><th>Episode</th><th>Status</th><th>Progress</th><th>File</th></tr>
+            <tr><th>Show</th><th>Episode</th><th>Status</th><th>Progress</th><th>File</th><th class="right">Actions</th></tr>
         </thead>
         <tbody>
             @foreach (var j in _jobs)
@@ -45,6 +45,20 @@ else
                         }
                     </td>
                     <td class="path muted small">@(j.OutputPath ?? j.ErrorMessage ?? "")</td>
+                    <td class="right actions">
+                        @if (!j.Active && j.Status != "Completed")
+                        {
+                            <button class="icon-btn" title="Retry download" @onclick="() => RetryAsync(j.JobId)">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                            </button>
+                        }
+                        @if (!j.Active)
+                        {
+                            <button class="icon-btn danger" title="Remove from list" @onclick="() => DeleteAsync(j.JobId)">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
+                        }
+                    </td>
                 </tr>
             }
         </tbody>
@@ -80,6 +94,22 @@ else
         using var scope = Scopes.CreateScope();
         var handler = scope.ServiceProvider.GetRequiredService<GetDownloadQueueHandler>();
         _jobs = await handler.HandleAsync();
+    }
+
+    // Re-queue a failed job (a fresh attempt runs) and drop the old failed row so the list stays tidy.
+    async Task RetryAsync(Guid jobId)
+    {
+        using var scope = Scopes.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<RetryDownloadHandler>().HandleAsync(jobId);
+        await scope.ServiceProvider.GetRequiredService<DeleteDownloadHandler>().HandleAsync(jobId);
+        await RefreshAsync();
+    }
+
+    async Task DeleteAsync(Guid jobId)
+    {
+        using var scope = Scopes.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<DeleteDownloadHandler>().HandleAsync(jobId);
+        await RefreshAsync();
     }
 
     static string StatusClass(DownloadJobResponse j) =>

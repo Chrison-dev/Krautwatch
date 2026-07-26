@@ -25,6 +25,7 @@ public interface IDownloadJobRepository
 
     Task AddAsync(DownloadJob job, CancellationToken ct = default);
     Task UpdateAsync(DownloadJob job, CancellationToken ct = default);
+    Task DeleteAsync(Guid id, CancellationToken ct = default);
 }
 
 public interface IEpisodeRepository

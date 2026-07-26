@@ -85,4 +85,7 @@ public class DownloadJobRepository(AppDbContext db) : IDownloadJobRepository
         db.DownloadJobs.Update(job);
         await db.SaveChangesAsync(ct);
     }
+
+    public async Task DeleteAsync(Guid id, CancellationToken ct = default) =>
+        await db.DownloadJobs.Where(j => j.Id == id).ExecuteDeleteAsync(ct);
 }
