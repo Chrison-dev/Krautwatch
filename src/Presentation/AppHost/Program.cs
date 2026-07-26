@@ -45,8 +45,13 @@ builder.AddProject<Projects.Krautwatch_Agents_Zdf>("agent-zdf")
     .WithReference(db).WaitFor(db).WaitForCompletion(migrator)
     .WithHttpHealthCheck("/health");
 
+// Dev fleet runs as bare processes, so "/downloads" (a container mount in prod) is read-only here —
+// point downloads at a writable temp dir. Production compose sets Download__Directory to the mount.
+var devDownloadDir = Path.Combine(Path.GetTempPath(), "krautwatch-downloads");
+
 builder.AddProject<Projects.Krautwatch_Agents_Downloader>("agent-downloader")
     .WithHttpEndpoint()
+    .WithEnvironment("Download__Directory", devDownloadDir)
     .WithReference(db).WaitFor(db).WaitForCompletion(migrator)
     .WithHttpHealthCheck("/health");
 
