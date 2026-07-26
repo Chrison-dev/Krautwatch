@@ -9,6 +9,8 @@
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
     <!-- BackgroundService + ILogger for the crawl scheduler (Application stays transport-agnostic) -->
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <!-- Source-generated object mapping (entity → DTO) -->
+    <PackageReference Include="Riok.Mapperly" />
   </ItemGroup>
 
 </Project>

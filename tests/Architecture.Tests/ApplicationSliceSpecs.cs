@@ -16,10 +16,11 @@ public class ApplicationSliceSpecs
         .Build();
 
     [Theory]
-    [InlineData("Catalog", "Crawling|Downloads|Settings")]
-    [InlineData("Crawling", "Catalog|Downloads|Settings")]
-    [InlineData("Downloads", "Catalog|Crawling|Settings")]
-    [InlineData("Settings", "Catalog|Crawling|Downloads")]
+    [InlineData("Catalog", "Crawling|Downloads|Indexing|Settings")]
+    [InlineData("Crawling", "Catalog|Downloads|Indexing|Settings")]
+    [InlineData("Downloads", "Catalog|Crawling|Indexing|Settings")]
+    [InlineData("Indexing", "Catalog|Crawling|Downloads|Settings")]
+    [InlineData("Settings", "Catalog|Crawling|Downloads|Indexing")]
     public void Slice_does_not_depend_on_sibling_slices(string slice, string siblings)
     {
         Types().That().ResideInNamespaceMatching($@"Krautwatch\.Application\.{slice}")

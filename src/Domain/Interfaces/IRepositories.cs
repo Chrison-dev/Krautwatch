@@ -18,6 +18,8 @@ public interface IEpisodeRepository
 {
     Task<Episode?> GetByIdAsync(string id, CancellationToken ct = default);
     Task<IReadOnlyList<Episode>> SearchAsync(string query, CancellationToken ct = default);
+    // Newest episodes first — the Newznab RSS feed (no query) reads from here.
+    Task<IReadOnlyList<Episode>> GetRecentAsync(int limit, CancellationToken ct = default);
     Task<IReadOnlyList<Episode>> GetByChannelAsync(string channelId, ContentType? contentType = null, CancellationToken ct = default);
     Task<IReadOnlyList<Episode>> GetByShowAsync(string showId, CancellationToken ct = default);
     Task<IReadOnlyList<Episode>> GetByContentTypeAsync(ContentType contentType, string? channelId = null, CancellationToken ct = default);
