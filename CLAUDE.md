@@ -92,7 +92,7 @@ a new `Application/<Broadcaster>` slice + an Infrastructure HTTP client + a `Pre
 
 ### Enforced
 
-This architecture is enforced by **NetArchTest** architecture tests in `tests/Architecture`
+This architecture is enforced by **ArchUnitNET** architecture tests in `tests/Architecture.Tests`
 (layer-dependency rules, slice isolation). Keep them green.
 
 ## Common commands
@@ -118,7 +118,7 @@ System dependency: **ffmpeg** on PATH (the Downloader agent's image bundles it).
 - **WolverineFx** — messaging/mediator/outbox (Postgres transport default, RabbitMQ opt-in).
 - **.NET Aspire** — dev orchestration + docker-compose generation (DR-003).
 - **OpenTelemetry** — logs/metrics/traces; Prometheus `/metrics`, Grafana in prod (DR-006).
-- **FluentValidation**; tests on **xUnit + Shouldly + NSubstitute + NetArchTest**.
+- **FluentValidation**; tests on **xUnit + Shouldly + NSubstitute + ArchUnitNET**.
 
 ## Architecture decisions
 

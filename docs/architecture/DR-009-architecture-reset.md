@@ -104,7 +104,7 @@ Presentation/
 
 ### 7. Enforcement
 
-The architecture is **baked into `CLAUDE.md`** and **enforced by architecture tests** (NetArchTest):
+The architecture is **baked into `CLAUDE.md`** and **enforced by architecture tests** (ArchUnitNET):
 layer dependency rules, "Domain has zero project deps", "Application depends only on Domain",
 "Presentation is not referenced by anything", and slice-isolation rules.
 
