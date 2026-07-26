@@ -15,8 +15,16 @@ public sealed class RawMp4DownloadProvider(FileNamingService naming, ILogger<Raw
 {
     // A dedicated client with no timeout: downloads are long and cancellation is driven by the token.
     // Deliberately not from IHttpClientFactory — that path carries ServiceDefaults' standard resilience
-    // handler, whose total-request timeout would abort a large streaming download.
-    private static readonly HttpClient Http = new() { Timeout = Timeout.InfiniteTimeSpan };
+    // handler, whose total-request timeout would abort a large streaming download. A User-Agent is
+    // required: the Mediathek CDNs 403 UA-less requests.
+    private static readonly HttpClient Http = CreateClient();
+
+    private static HttpClient CreateClient()
+    {
+        var http = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("Krautwatch/1.0 (+https://github.com/Chrison-dev/Krautwatch)");
+        return http;
+    }
 
     public async Task<DownloadResult> DownloadAsync(
         DownloadJob job, string outputDirectory, IProgress<double> progress, CancellationToken ct = default)
