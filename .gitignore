@@ -488,3 +488,5 @@ $RECYCLE.BIN/
 *.db
 *.db-shm
 *.db-wal
+# Fallout build system
+.fallout/temp/
