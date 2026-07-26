@@ -77,4 +77,31 @@ public class EpisodeMapperTests
 
         episode.Description!.Length.ShouldBe(5000);
     }
+
+    [Fact]
+    public void A_dated_title_leaves_numbering_null_and_the_show_Daily()
+    {
+        var channel = EpisodeMapper.Channel("ard", "ARD");
+        var show = EpisodeMapper.Show("ard", "extra 3", channel);
+
+        var episode = EpisodeMapper.Episode("ard", show, "x", Detail() with { Title = "extra 3 vom 10.07.2026" });
+
+        episode.SeasonNumber.ShouldBeNull();
+        episode.EpisodeNumber.ShouldBeNull();
+        show.SeriesType.ShouldBe(SeriesType.Daily);
+    }
+
+    [Fact]
+    public void A_numbered_title_populates_SxE_and_upgrades_the_show_to_Standard()
+    {
+        var channel = EpisodeMapper.Channel("kika", "KiKA");
+        var show = EpisodeMapper.Show("kika", "Die Biene Maja", channel);
+        show.SeriesType.ShouldBe(SeriesType.Daily); // default before we see numbering
+
+        var episode = EpisodeMapper.Episode("kika", show, "42", Detail() with { Title = "Geh nicht, Maja! (S02/E52)" });
+
+        episode.SeasonNumber.ShouldBe(2);
+        episode.EpisodeNumber.ShouldBe(52);
+        show.SeriesType.ShouldBe(SeriesType.Standard);
+    }
 }
