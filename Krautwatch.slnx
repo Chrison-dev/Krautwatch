@@ -7,8 +7,11 @@
   <Folder Name="/src/Presentation/">
     <Project Path="src/Presentation/AppHost/Krautwatch.AppHost.csproj" />
     <Project Path="src/Presentation/ServiceDefaults/Krautwatch.ServiceDefaults.csproj" />
-    <Project Path="src/Presentation/Api/Krautwatch.Api.csproj" />
     <Project Path="src/Presentation/Web/Krautwatch.Web.csproj" />
+  </Folder>
+  <Folder Name="/src/Presentation/Api/">
+    <Project Path="src/Presentation/Api/PublicApi/Krautwatch.Api.csproj" />
+    <Project Path="src/Presentation/Api/NewznabIndexerApi/Krautwatch.Api.NewznabIndexerApi.csproj" />
   </Folder>
   <Folder Name="/src/Presentation/Agents/">
     <Project Path="src/Presentation/Agents/Ard/Krautwatch.Agents.Ard.csproj" />

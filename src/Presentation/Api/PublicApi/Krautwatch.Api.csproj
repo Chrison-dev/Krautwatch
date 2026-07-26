@@ -5,9 +5,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Application\Krautwatch.Application.csproj" />
-    <ProjectReference Include="..\..\Infrastructure\Krautwatch.Infrastructure.csproj" />
-    <ProjectReference Include="..\ServiceDefaults\Krautwatch.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\..\Application\Krautwatch.Application.csproj" />
+    <ProjectReference Include="..\..\..\Infrastructure\Krautwatch.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\ServiceDefaults\Krautwatch.ServiceDefaults.csproj" />
   </ItemGroup>
 
   <ItemGroup>
