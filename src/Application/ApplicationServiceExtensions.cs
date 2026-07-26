@@ -27,6 +27,7 @@ public static class ApplicationServiceExtensions
         // which no other host provides.
         services.AddScoped<CancelDownloadHandler>();
         services.AddScoped<RetryDownloadHandler>();
+        services.AddScoped<DeleteDownloadHandler>();
         services.AddScoped<GetDownloadQueueHandler>();
         services.AddScoped<GetDownloadJobHandler>();
 

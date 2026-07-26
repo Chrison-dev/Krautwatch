@@ -106,5 +106,15 @@ public class DownloadJobRepositoryTests : IDisposable
         (await Repo().ReclaimStaleAsync("worker-2")).ShouldBe(0);
     }
 
+    [Fact]
+    public async Task Delete_removes_the_job()
+    {
+        var id = await AddQueuedAsync(DateTimeOffset.UtcNow);
+
+        await Repo().DeleteAsync(id);
+
+        (await Repo().GetByIdAsync(id)).ShouldBeNull();
+    }
+
     public void Dispose() => _conn.Dispose();
 }
