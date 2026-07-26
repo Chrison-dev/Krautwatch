@@ -20,5 +20,6 @@
     <Project Path="tests/Application.Tests/Krautwatch.Application.Tests.csproj" />
     <Project Path="tests/Infrastructure.Tests/Krautwatch.Infrastructure.Tests.csproj" />
     <Project Path="tests/Architecture.Tests/Krautwatch.Architecture.Tests.csproj" />
+    <Project Path="tests/Live.Tests/Krautwatch.Live.Tests.csproj" />
   </Folder>
 </Solution>

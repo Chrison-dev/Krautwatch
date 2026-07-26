@@ -7,8 +7,9 @@ using static Fallout.Common.Tools.DotNet.DotNetTasks;
 /// <summary>
 /// Fallout build for Krautwatch. CI (build.yml — GENERATED from the [GitHubActions] attribute;
 /// never hand-edit it) compiles the solution and runs the unit tests on push/PR to main.
-/// Regenerate the workflow with `./build.cmd` or:
-///   dotnet fallout --generate-configuration GitHubActions_build --host GitHubActions
+///
+/// Live network tests (ARD/ZDF) are tagged [Trait("Category","Live")] and EXCLUDED from the
+/// default Test run — external APIs drift/rate-limit. Run them on demand: ./build.cmd TestLive
 /// </summary>
 [GitHubActions(
     "build",
@@ -30,10 +31,20 @@ partial class Build : FalloutBuild
             .SetConfiguration("Release")));
 
     Target Test => _ => _
-        .Description("Run the unit tests")
+        .Description("Run the unit tests (excludes live network tests)")
         .DependsOn(Compile)
         .Executes(() => DotNetTest(_ => _
             .SetProjectFile(SolutionFile)
             .SetConfiguration("Release")
+            .SetFilter("Category!=Live")
+            .EnableNoBuild()));
+
+    Target TestLive => _ => _
+        .Description("Run ONLY the live network tests against the real ARD/ZDF APIs")
+        .DependsOn(Compile)
+        .Executes(() => DotNetTest(_ => _
+            .SetProjectFile(SolutionFile)
+            .SetConfiguration("Release")
+            .SetFilter("Category=Live")
             .EnableNoBuild()));
 }
