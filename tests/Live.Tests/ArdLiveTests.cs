@@ -49,12 +49,19 @@ public class ArdLiveTests
         fullShow.ItemHref.ShouldContain("api.ardmediathek.de");
     }
 
-    [Fact(Skip = "Long-running + writes a large file to disk — run manually. Needs stream resolution + ffmpeg (next slice).")]
-    public async Task Downloads_an_Extra3_episode()
+    [Fact]
+    public async Task Downloads_a_full_Extra3_episode()
     {
-        // TODO (download slice): resolve the item href -> mediaCollection streams (mp4/hls),
-        // pick the progressive MP4, stream to disk via ffmpeg, assert the file exists + non-trivial size.
-        await Task.CompletedTask;
+        var show = await Client.FindShowAsync("Extra 3");
+        show.ShouldNotBeNull();
+        var episodes = await Client.GetFullEpisodesAsync(show!);
+        var full = episodes.First(e => e.Title.Contains("extra 3 vom", StringComparison.OrdinalIgnoreCase));
+        var detail = await Client.FetchEpisodeDetailAsync(full);
+        detail.ShouldNotBeNull();
+        detail!.StreamUrl.ShouldNotBeNull();
+
+        // Raw download of the exact MP4 the ARD Mediathek serves — no conversion, no ffmpeg.
+        await Download.VerifyRawMp4Async(Http, detail.StreamUrl!);
     }
 }
 
