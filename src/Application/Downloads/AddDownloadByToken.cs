@@ -23,11 +23,12 @@ public class AddDownloadByTokenHandler(
 
         var job = new DownloadJob
         {
-            Id        = Guid.NewGuid(),
-            EpisodeId = episode.Id,
-            Episode   = episode,
-            StreamUrl = stream.Url,
-            Quality   = stream.Quality,
+            Id            = Guid.NewGuid(),
+            EpisodeId     = episode.Id,
+            Episode       = episode,
+            StreamUrl     = stream.Url,
+            Quality       = stream.Quality,
+            GeoRestricted = episode.GeoRestricted,
         };
 
         await jobs.AddAsync(job, ct);

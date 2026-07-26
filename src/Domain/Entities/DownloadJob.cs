@@ -16,6 +16,13 @@ public class DownloadJob
     public Episode? Episode { get; set; }
     public string StreamUrl { get; init; } = default!;
     public VideoQuality Quality { get; init; }
+
+    /// <summary>
+    /// Snapshot of <see cref="Episode.GeoRestricted"/> at enqueue time: the stream is only reachable
+    /// from an in-region egress, so the Downloader must route this job through the configured proxy (#45).
+    /// </summary>
+    public bool GeoRestricted { get; init; }
+
     public DownloadStatus Status { get; private set; } = DownloadStatus.Queued;
 
     /// <summary>Worker that claimed this job (set during MarkClaiming).</summary>

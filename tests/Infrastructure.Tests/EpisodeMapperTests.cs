@@ -104,4 +104,14 @@ public class EpisodeMapperTests
         episode.EpisodeNumber.ShouldBe(52);
         show.SeriesType.ShouldBe(SeriesType.Standard);
     }
+
+    [Fact]
+    public void The_geo_restriction_flag_carries_from_detail_to_the_episode()
+    {
+        var channel = EpisodeMapper.Channel("kika", "KiKA");
+        var show = EpisodeMapper.Show("kika", "Die Biene Maja", channel);
+
+        EpisodeMapper.Episode("kika", show, "42", Detail()).GeoRestricted.ShouldBeFalse(); // default
+        EpisodeMapper.Episode("kika", show, "42", Detail() with { GeoRestricted = true }).GeoRestricted.ShouldBeTrue();
+    }
 }

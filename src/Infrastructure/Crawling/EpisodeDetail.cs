@@ -11,5 +11,6 @@ public sealed record EpisodeDetail(
     DateTimeOffset? AirDate,
     TimeSpan Duration,
     string? Synopsis,
-    string? StreamUrl,     // progressive MP4 (preferred)
-    string? SubtitleUrl);  // webvtt, if available
+    string? StreamUrl,           // progressive MP4 (preferred)
+    string? SubtitleUrl,         // webvtt, if available
+    bool GeoRestricted = false); // broadcaster declares the asset in-region-only (ARD isGeoBlocked / ZDF geoLocation)

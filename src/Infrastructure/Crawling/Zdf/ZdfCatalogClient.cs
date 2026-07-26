@@ -5,8 +5,9 @@ namespace Krautwatch.Infrastructure.Crawling.Zdf;
 /// <summary>An episode found in the ZDF search.</summary>
 public sealed record ZdfEpisode(string Title, string Query, DateTimeOffset? EditorialDate, string Canonical);
 
-/// <summary>A resolved progressive stream (MP4).</summary>
-public sealed record ZdfStream(string Quality, string MimeType, string Url);
+/// <summary>A resolved progressive stream (MP4). <paramref name="GeoRestricted"/> reflects the PTMD
+/// <c>attributes.geoLocation</c> (anything other than "none" = in-region-only, e.g. "dach"/"de") (#45).</summary>
+public sealed record ZdfStream(string Quality, string MimeType, string Url, bool GeoRestricted = false);
 
 /// <summary>
 /// Reads the ZDF Mediathek API. Search is the REST <c>/search/documents?q=</c> endpoint
@@ -63,6 +64,13 @@ public sealed class ZdfCatalogClient(HttpClient http)
         using var ptmd = await GetJsonAsync(ptmdUrl, ct);
         if (ptmd is null || !ptmd.RootElement.TryGetProperty("priorityList", out var priorities)) return null;
 
+        // attributes.geoLocation.value: "none" = worldwide, otherwise in-region-only ("dach"/"de") (#45).
+        var geoRestricted = ptmd.RootElement.TryGetProperty("attributes", out var attrs)
+            && attrs.TryGetProperty("geoLocation", out var geo)
+            && geo.TryGetProperty("value", out var geoVal)
+            && geoVal.ValueKind == JsonValueKind.String
+            && !string.Equals(geoVal.GetString(), "none", StringComparison.OrdinalIgnoreCase);
+
         // Rank MP4 qualities high→low; pick the best available.
         var order = new[] { "fhd", "uhd", "hd", "veryhigh", "high", "low" };
         ZdfStream? best = null;
@@ -95,7 +103,7 @@ public sealed class ZdfCatalogClient(HttpClient http)
                 }
             }
         }
-        return best;
+        return best is null ? null : best with { GeoRestricted = geoRestricted };
     }
 
     /// <summary>Fetch a single ZDF episode's full program data (doc metadata + resolved progressive MP4).</summary>
@@ -119,7 +127,8 @@ public sealed class ZdfCatalogClient(HttpClient http)
 
         var stream = await ResolveBestMp4Async(episode.Canonical, ct);
 
-        return new EpisodeDetail(title, show, "ZDF", airDate, duration, synopsis, stream?.Url, SubtitleUrl: null);
+        return new EpisodeDetail(title, show, "ZDF", airDate, duration, synopsis, stream?.Url, SubtitleUrl: null,
+            GeoRestricted: stream?.GeoRestricted ?? false);
     }
 
     private static string? FindPtmdTemplate(JsonElement root)
