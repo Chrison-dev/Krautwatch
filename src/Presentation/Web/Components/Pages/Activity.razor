@@ -1,0 +1,89 @@
+@page "/activity"
+@implements IDisposable
+@inject IServiceScopeFactory Scopes
+@using Krautwatch.Application.Downloads
+
+<PageTitle>Activity · Krautwatch</PageTitle>
+
+<h1>Activity</h1>
+
+@if (_jobs is null)
+{
+    <p class="muted">Loading…</p>
+}
+else if (_jobs.Count == 0)
+{
+    <p class="muted">No downloads yet — queue one from <a href="search">Search</a>.</p>
+}
+else
+{
+    <table>
+        <thead>
+            <tr><th>Show</th><th>Episode</th><th>Status</th><th>Progress</th><th>File</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var j in _jobs)
+            {
+                <tr>
+                    <td>@j.ShowTitle</td>
+                    <td>@j.EpisodeTitle</td>
+                    <td><span class="status @StatusClass(j)">@j.Status</span></td>
+                    <td>
+                        @if (j.Active && j.ProgressPercent is > 0)
+                        {
+                            var pct = (int)j.ProgressPercent!.Value;
+                            <div class="bar"><div class="fill" style="width:@(pct)%"></div></div>
+                            <span class="muted small">@pct%</span>
+                        }
+                        else if (j.Status == "Completed")
+                        {
+                            <span class="ok">✓</span>
+                        }
+                        else
+                        {
+                            <span class="muted">—</span>
+                        }
+                    </td>
+                    <td class="path muted small">@(j.OutputPath ?? j.ErrorMessage ?? "")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    IReadOnlyList<DownloadJobResponse>? _jobs;
+    PeriodicTimer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+        _timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
+        _ = PollAsync();
+    }
+
+    async Task PollAsync()
+    {
+        try
+        {
+            while (await _timer!.WaitForNextTickAsync())
+            {
+                await RefreshAsync();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException) { /* disposed */ }
+    }
+
+    async Task RefreshAsync()
+    {
+        using var scope = Scopes.CreateScope();
+        var handler = scope.ServiceProvider.GetRequiredService<GetDownloadQueueHandler>();
+        _jobs = await handler.HandleAsync();
+    }
+
+    static string StatusClass(DownloadJobResponse j) =>
+        j.Status == "Completed" ? "done" : j.Active ? "active" : "failed";
+
+    public void Dispose() => _timer?.Dispose();
+}

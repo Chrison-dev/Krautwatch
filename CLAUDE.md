@@ -85,6 +85,7 @@ Presentation/
 ├── AppHost/               .NET Aspire — the single dev entry point (`dotnet run`) that runs the fleet
 ├── ServiceDefaults/       OTel / health, shared by every host
 ├── Migrator/              run-to-completion EF-migration owner; consumers WaitForCompletion it
+├── Web/                   standalone Blazor-Server UI (search / download / monitor), Application in-process
 ├── Api/
 │   └── NewznabIndexerApi/ Newznab (indexer) + SABnzbd (download client) — the public *arr-facing surface
 └── Agents/                (was "Worker")                                   → Actions
@@ -93,9 +94,11 @@ Presentation/
     └── Downloader/        polls the job table → raw MP4 copy, or ffmpeg remux for HLS
 ```
 
-> The pre-DR-010 browser product (`Api/PublicApi` internal JSON API + the `Web` Blazor browse UI) was
-> retired — Sonarr/Radarr drive Krautwatch now (DR-010), so there is no first-party browse surface. A
-> genuine *arr **config** UI (Sonarr/Radarr instances, apikey) is future greenfield work.
+> The pre-DR-010 browser product (`Api/PublicApi` internal JSON API + the old `Web` browse UI) was
+> retired — Sonarr/Radarr drive Krautwatch (DR-010). The current `Web` is a **fresh, purpose-built
+> standalone UI** (Blazor Server, talks to Application in-process) for search / manual download /
+> monitor without an *arr instance. A genuine *arr **config** UI (Sonarr/Radarr instances, apikey) is
+> still future work.
 
 Each host is an **independently deployable microservice** from day one. **Adding a broadcaster** =
 a new `Application/<Broadcaster>` slice + an Infrastructure HTTP client + a `Presentation/Agents/<Broadcaster>` host.

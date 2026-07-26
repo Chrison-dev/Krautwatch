@@ -8,6 +8,7 @@
     <Project Path="src/Presentation/AppHost/Krautwatch.AppHost.csproj" />
     <Project Path="src/Presentation/ServiceDefaults/Krautwatch.ServiceDefaults.csproj" />
     <Project Path="src/Presentation/Migrator/Krautwatch.Migrator.csproj" />
+    <Project Path="src/Presentation/Web/Krautwatch.Web.csproj" />
   </Folder>
   <Folder Name="/src/Presentation/Api/">
     <Project Path="src/Presentation/Api/NewznabIndexerApi/Krautwatch.Api.NewznabIndexerApi.csproj" />

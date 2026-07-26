@@ -1,5 +1,6 @@
 using Krautwatch.Agents.Downloader;
 using Krautwatch.Application;
+using Krautwatch.Application.Downloads;
 using Krautwatch.Infrastructure;
 
 // Krautwatch Downloader agent (DR-009). Polls the durable job table for Queued downloads and pulls
@@ -18,7 +19,8 @@ builder.Services.AddInfrastructure(new DbProviderOptions
     ConnectionString = connectionString,
 });
 builder.Services.AddApplication();
-builder.Services.AddDownloadProvider();                 // the raw-MP4 download engine
+builder.Services.AddDownloadProvider();                 // the raw-MP4 / ffmpeg download engines
+builder.Services.AddScoped<RunDownloadHandler>();       // the Action — needs IDownloadProvider (this host only)
 builder.Services.AddHostedService<DownloadWorker>();    // claims + runs Queued jobs
 
 var app = builder.Build();

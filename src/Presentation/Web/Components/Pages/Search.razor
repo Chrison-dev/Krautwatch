@@ -1,0 +1,93 @@
+@page "/search"
+@inject IServiceScopeFactory Scopes
+@using Krautwatch.Application.Catalog
+@using Krautwatch.Application.Downloads
+
+<PageTitle>Search · Krautwatch</PageTitle>
+
+<h1>Search</h1>
+
+<div class="searchbar">
+    <input @bind="_query" @bind:event="oninput" @onkeyup="OnKey"
+           placeholder="Show or episode title (e.g. heute-show)…" autofocus />
+    <button @onclick="RunSearchAsync" disabled="@_busy">Search</button>
+</div>
+
+@if (_busy)
+{
+    <p class="muted">Searching…</p>
+}
+else if (_results is { Count: 0 })
+{
+    <p class="muted">No matches — has the crawler run yet?</p>
+}
+else if (_results is not null)
+{
+    <table>
+        <thead>
+            <tr><th>Show</th><th>Episode</th><th>Channel</th><th>Aired</th><th class="right">Length</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var r in _results)
+            {
+                <tr>
+                    <td>@r.ShowTitle</td>
+                    <td>@r.EpisodeTitle</td>
+                    <td>@r.ChannelName</td>
+                    <td>@r.BroadcastDate.ToString("yyyy-MM-dd")</td>
+                    <td class="right muted">@r.Duration.ToString(@"hh\:mm")</td>
+                    <td class="right">
+                        @if (_queued.Contains(r.EpisodeId))
+                        {
+                            <span class="ok">Queued ✓</span>
+                        }
+                        else if (r.Streams.Count == 0)
+                        {
+                            <span class="muted">no stream</span>
+                        }
+                        else
+                        {
+                            <button class="ghost" @onclick="() => DownloadAsync(r.EpisodeId)">Download</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    string _query = "";
+    bool _busy;
+    IReadOnlyList<SearchCatalogResponse>? _results;
+    readonly HashSet<string> _queued = new();
+
+    async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await RunSearchAsync();
+    }
+
+    async Task RunSearchAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_query) || _query.Trim().Length < 2) return;
+        _busy = true;
+        try
+        {
+            using var scope = Scopes.CreateScope();
+            var handler = scope.ServiceProvider.GetRequiredService<SearchCatalogQueryHandler>();
+            _results = await handler.HandleAsync(new SearchCatalogQuery(_query.Trim()));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    async Task DownloadAsync(string episodeId)
+    {
+        using var scope = Scopes.CreateScope();
+        var handler = scope.ServiceProvider.GetRequiredService<AddDownloadByTokenHandler>();
+        var jobId = await handler.HandleAsync(episodeId);
+        if (jobId is not null) _queued.Add(episodeId);
+    }
+}

@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Migrator\Krautwatch.Migrator.csproj" />
     <ProjectReference Include="..\Api\NewznabIndexerApi\Krautwatch.Api.NewznabIndexerApi.csproj" />
+    <ProjectReference Include="..\Web\Krautwatch.Web.csproj" />
     <ProjectReference Include="..\Agents\Ard\Krautwatch.Agents.Ard.csproj" />
     <ProjectReference Include="..\Agents\Zdf\Krautwatch.Agents.Zdf.csproj" />
     <ProjectReference Include="..\Agents\Downloader\Krautwatch.Agents.Downloader.csproj" />
