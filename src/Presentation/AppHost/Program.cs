@@ -1,9 +1,16 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
 // ──────────────────────────────────────────────────────────────
-// The *arr-facing API surface (Newznab + SABnzbd + RSS).
+// Postgres (DR-009) — Aspire provisions the container + database, and injects the
+// connection string into the referencing services as ConnectionStrings:krautwatch.
 // ──────────────────────────────────────────────────────────────
+var postgres = builder.AddPostgres("postgres");
+var db = postgres.AddDatabase("krautwatch");
+
+// The *arr-facing API surface (Newznab + SABnzbd + RSS).
 var api = builder.AddProject<Projects.Krautwatch_Api>("api")
+    .WithReference(db)
+    .WaitFor(db)
     .WithHttpHealthCheck("/health")
     .WithExternalHttpEndpoints();
 
@@ -13,8 +20,8 @@ builder.AddProject<Projects.Krautwatch_Web>("web")
     .WaitFor(api)
     .WithExternalHttpEndpoints();
 
-// TODO (DR-009 fleet — later increment): provision Postgres and add the crawler
-// agents (Ard/Zdf) + Downloader agent here, wired to Postgres + the message transport.
+// TODO (5b): add the crawler agents (Ard/Zdf) + Downloader agent here, each with
+// .WithReference(db) and the message transport.
 
 // ──────────────────────────────────────────────────────────────
 // Observability (opt-in via launch profile "observability")

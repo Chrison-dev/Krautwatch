@@ -2,27 +2,39 @@ using Krautwatch.Application;
 using Krautwatch.Api.Endpoints;
 using Krautwatch.Infrastructure;
 using Wolverine;
+using Wolverine.Postgresql;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-var dbPath = builder.Configuration["Database:Path"] ?? "/data/mediathek.db";
+// Postgres connection string injected by Aspire (AppHost: api.WithReference(db)).
+var connectionString = builder.Configuration.GetConnectionString("krautwatch")
+    ?? "Host=localhost;Port=5432;Database=krautwatch;Username=postgres;Password=postgres";
 
-builder.Services.AddInfrastructure(new DbProviderOptions { ConnectionString = $"Data Source={dbPath}" });
+builder.Services.AddInfrastructure(new DbProviderOptions
+{
+    Provider = "postgres",
+    ConnectionString = connectionString,
+});
 builder.Services.AddApplication();
-
 builder.Services.AddOpenApi();
 
-// Wolverine — API only publishes messages, Worker consumes them
-// In-process transport: messages go to the Worker via the durable local queue
+// Wolverine — durable messaging backed by Postgres (DR-009: Postgres transport default,
+// RabbitMQ opt-in later). Messages survive restarts via the Postgres-backed store.
 builder.UseWolverine(opts =>
 {
+    opts.PersistMessagesWithPostgresql(connectionString);
+    opts.Policies.UseDurableLocalQueues();
+
     opts.PublishMessage<Krautwatch.Application.Downloads.StartDownloadCommand>()
         .ToLocalQueue("downloads");
 });
 
 var app = builder.Build();
+
+// The API owns the DB for now — apply EF migrations at startup.
+await app.MigrateDatabaseAsync();
 
 app.MapOpenApi();
 app.MapDefaultEndpoints(); // /health, /alive from ServiceDefaults

@@ -4,28 +4,16 @@ using Microsoft.EntityFrameworkCore.Design;
 namespace Krautwatch.Infrastructure.Persistence;
 
 /// <summary>
-/// Design-time factory used by the EF Core CLI tools (dotnet ef migrations add, etc.)
-///
-/// Run migrations from the Worker project — it is the single startup project:
-///
-///   cd src/Krautwatch.Worker
-///   dotnet ef migrations add &lt;Name&gt; \
-///     --project ../Krautwatch.Infrastructure \
-///     --startup-project .
-///
-///   dotnet ef database update \
-///     --project ../Krautwatch.Infrastructure \
-///     --startup-project .
-///
-/// The factory uses a local SQLite file (mediathek-design.db) purely for
-/// schema generation — it is never used at runtime.
+/// Design-time factory for the EF Core CLI (dotnet ef migrations add ...).
+/// Uses Npgsql with a placeholder connection string purely for schema generation —
+/// `migrations add` does not connect, so no live Postgres is required to scaffold.
 /// </summary>
 public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
 {
     public AppDbContext CreateDbContext(string[] args)
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite("Data Source=mediathek-design.db")
+            .UseNpgsql("Host=localhost;Database=krautwatch_design;Username=postgres;Password=postgres")
             .Options;
 
         return new AppDbContext(options);

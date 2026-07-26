@@ -12,40 +12,40 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-// using TickerQ.DependencyInjection; // TODO: Add proper TickerQ reference
 
 namespace Krautwatch.Infrastructure;
 
 // ──────────────────────────────────────────────────────────────
-// Database provider options — swap by changing config only
+// Database provider options — swap by changing config only (DR-009).
+// Postgres is the default; sqlite/mssql remain available.
 // ──────────────────────────────────────────────────────────────
 
 public record DbProviderOptions
 {
-    public string Provider { get; init; } = "sqlite";
-    public string ConnectionString { get; init; } = "Data Source=/data/mediathek.db";
+    public string Provider { get; init; } = "postgres";
+    public string ConnectionString { get; init; } =
+        "Host=localhost;Port=5432;Database=krautwatch;Username=postgres;Password=postgres";
 }
 
 public static class InfrastructureServiceExtensions
 {
     /// <summary>
-    /// Registers EF Core, repositories, TickerQ, and job classes.
+    /// Registers EF Core (the configured provider), the download-queue port, and repositories.
     /// </summary>
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
         DbProviderOptions dbOptions)
     {
-        services.AddDbContext<AppDbContext>(options =>
-            ConfigureProvider(options, dbOptions));
+        services.AddDbContext<AppDbContext>(options => ConfigureProvider(options, dbOptions));
 
-        // System status — singleton, written by job classes, read by API
+        // System status — singleton, written by jobs/agents, read by the API
         services.AddSingleton<SystemStatusService>();
 
         // File naming for downloads
         services.AddSingleton<FileNamingService>();
 
-        // Download queue abstraction — Application layer talks to this, not TickerQ directly
-        services.AddScoped<IDownloadQueue, TickerQDownloadQueue>();
+        // Download-queue port — the Application layer talks to this abstraction
+        services.AddScoped<IDownloadQueue, NullDownloadQueue>();
 
         // Repositories
         services.AddScoped<IEpisodeRepository, EpisodeRepository>();
@@ -55,85 +55,25 @@ public static class InfrastructureServiceExtensions
         return services;
     }
 
-    /// <summary>
-    /// Registers TickerQ with EF Core persistence, dashboard, and all job classes.
-    /// Call this from roles that run jobs: core (catalog + maintenance) + worker (downloads).
-    /// In standalone mode, call once — all jobs are registered together.
-    /// </summary>
-    public static IServiceCollection AddTickerQJobs(
-        this IServiceCollection services,
-        bool includeDashboard = false)
-    {
-        // TODO: Properly implement TickerQ integration
-        // For now, just return services to allow compilation
-        
-        /*
-        services.AddTickerQ(options =>
-        {
-            options.SetMaxConcurrency(4);
-            options.SetExceptionHandler<DownloadJobExceptionHandler>();
-
-            options.AddOperationalStore<AppDbContext>(efOpts =>
-            {
-                // UseModelCustomizerForMigrations is NOT used here — we apply
-                // TickerQ configs explicitly in AppDbContext.OnModelCreating
-                // so they're visible at design-time without extra setup.
-                efOpts.CancelMissedTickersOnApplicationRestart();
-            });
-
-            if (includeDashboard)
-            {
-                options.AddDashboard(dashOpts =>
-                {
-                    dashOpts.BasePath = "/tickerq";
-                    // Basic auth credentials from config (TickerQ:Dashboard:Username/Password)
-                    dashOpts.AddDashboardBasicAuth();
-                });
-            }
-        });
-
-        // Job classes — registered as scoped by TickerQ's source generator
-        services.AddScoped<ResolveStreamJob>();
-        services.AddScoped<DownloadStreamJob>();
-        services.AddScoped<FinaliseDownloadJob>();
-        services.AddScoped<CatalogRefreshJob>();
-        services.AddScoped<MaintenanceJobs>();
-        services.AddScoped<DownloadJobExceptionHandler>();
-
-        services.AddHttpClient<MediathekViewProvider>(client =>
-        {
-            client.Timeout = TimeSpan.FromSeconds(300);
-            client.DefaultRequestHeaders.Add("User-Agent", "Krautwatch/1.0");
-        });
-
-        // Seed cron tickers on startup
-        services.AddHostedService<TickerQSeedService>();
-        */
-
-        return services;
-    }
-
     private static void ConfigureProvider(DbContextOptionsBuilder options, DbProviderOptions db)
     {
         switch (db.Provider.ToLowerInvariant())
         {
-            case "sqlite":
-                options.UseSqlite(db.ConnectionString);
-                break;
-            /*
             case "postgres":
             case "postgresql":
                 options.UseNpgsql(db.ConnectionString);
+                break;
+            case "sqlite":
+                options.UseSqlite(db.ConnectionString);
                 break;
             case "mssql":
             case "sqlserver":
                 options.UseSqlServer(db.ConnectionString);
                 break;
-            */
             default:
                 throw new InvalidOperationException(
                     $"Unsupported database provider: '{db.Provider}'. " +
-                    "Supported values: sqlite, postgres, mssql");
+                    "Supported values: postgres, sqlite, mssql");
         }
     }
 
@@ -150,15 +90,6 @@ public static class InfrastructureServiceExtensions
 
         if (configure is not null)
             services.Configure(configure);
-
-        // TODO: Add HTTP client extensions package
-        /*
-        services.AddHttpClient<MediathekViewProvider>(client =>
-        {
-            client.Timeout = TimeSpan.FromSeconds(300);
-            client.DefaultRequestHeaders.Add("User-Agent", "Krautwatch/1.0");
-        });
-        */
 
         services.AddScoped<FilmlisteParser>();
         services.AddScoped<ICatalogProvider, MediathekViewProvider>();

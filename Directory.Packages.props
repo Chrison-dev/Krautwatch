@@ -3,25 +3,18 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
 
-  <ItemGroup Label="TickerQ">
-    <!-- All TickerQ packages must be the same version. 10.x targets .NET 10. -->
-    <PackageVersion Include="TickerQ"                      Version="10.1.1" />
-    <PackageVersion Include="TickerQ.EntityFrameworkCore"  Version="10.1.1" />
-    <PackageVersion Include="TickerQ.Utilities"            Version="10.1.1" />
-    <PackageVersion Include="TickerQ.Dashboard"            Version="10.1.1" />
-  </ItemGroup>
-
-  <ItemGroup Label="WolverineFx">
-    <PackageVersion Include="WolverineFx" Version="5.18.0" />
+  <ItemGroup Label="Messaging (WolverineFx — Postgres transport default, DR-009)">
+    <PackageVersion Include="WolverineFx"            Version="5.18.0" />
+    <PackageVersion Include="WolverineFx.Postgresql" Version="5.18.0" />
   </ItemGroup>
 
   <ItemGroup Label="EF Core">
-    <PackageVersion Include="Microsoft.EntityFrameworkCore"                    Version="10.0.3" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite"             Version="10.0.3" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design"             Version="10.0.3" />
-    <!-- Optional providers — add the one you need, leave others out -->
-    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL"            Version="10.0.0-preview.1" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer"          Version="10.0.3" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore"                    Version="10.0.4" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite"             Version="10.0.4" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design"             Version="10.0.4" />
+    <!-- Postgres is the default provider (DR-009); sqlite/mssql remain available -->
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL"            Version="10.0.3" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer"          Version="10.0.4" />
   </ItemGroup>
 
   <ItemGroup Label="Validation">
@@ -38,6 +31,10 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime"         Version="1.10.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Hosting">
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0" />
+  </ItemGroup>
+
   <ItemGroup Label="Extensions">
     <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.0" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.0" />
@@ -49,6 +46,7 @@
 
   <ItemGroup Label="Aspire">
     <PackageVersion Include="Aspire.Hosting"                    Version="13.1.2" />
+    <PackageVersion Include="Aspire.Hosting.PostgreSQL"         Version="13.1.2" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="9.3.1" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="9.4.0" />
   </ItemGroup>
