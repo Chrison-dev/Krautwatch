@@ -22,7 +22,7 @@ namespace Krautwatch.Infrastructure;
 
 // ──────────────────────────────────────────────────────────────
 // Database provider options — swap by changing config only (DR-009).
-// Postgres is the default; sqlite/mssql remain available.
+// Postgres is the default; mssql remains available.
 // ──────────────────────────────────────────────────────────────
 
 public record DbProviderOptions
@@ -69,9 +69,6 @@ public static class InfrastructureServiceExtensions
             case "postgresql":
                 options.UseNpgsql(db.ConnectionString);
                 break;
-            case "sqlite":
-                options.UseSqlite(db.ConnectionString);
-                break;
             case "mssql":
             case "sqlserver":
                 options.UseSqlServer(db.ConnectionString);
@@ -79,7 +76,7 @@ public static class InfrastructureServiceExtensions
             default:
                 throw new InvalidOperationException(
                     $"Unsupported database provider: '{db.Provider}'. " +
-                    "Supported values: postgres, sqlite, mssql");
+                    "Supported values: postgres, mssql");
         }
     }
 

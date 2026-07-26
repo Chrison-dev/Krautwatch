@@ -10,9 +10,10 @@
 
   <ItemGroup Label="EF Core">
     <PackageVersion Include="Microsoft.EntityFrameworkCore"                    Version="10.0.4" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite"             Version="10.0.4" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design"             Version="10.0.4" />
-    <!-- Postgres is the default provider (DR-009); sqlite/mssql remain available -->
+    <!-- Postgres is the default provider (DR-009); mssql remains swappable by config.
+         Sqlite was removed: unused in production and it dragged in a vulnerable
+         SQLitePCLRaw (NU1903 / GHSA-2m69-gcr7-jv3q). Tests use real Postgres via Testcontainers. -->
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL"            Version="10.0.3" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer"          Version="10.0.4" />
   </ItemGroup>
@@ -58,6 +59,7 @@
 
   <ItemGroup Label="Testing">
     <PackageVersion Include="Microsoft.NET.Test.Sdk"     Version="17.14.1" />
+    <PackageVersion Include="Testcontainers.PostgreSql"  Version="4.13.0" />
     <PackageVersion Include="xunit"                      Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio"  Version="2.8.2" />
     <PackageVersion Include="Shouldly"                   Version="4.3.0" />

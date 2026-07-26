@@ -2,29 +2,24 @@ using Krautwatch.Domain.Entities;
 using Krautwatch.Domain.Enums;
 using Krautwatch.Infrastructure.Downloads;
 using Krautwatch.Infrastructure.Persistence;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Shouldly;
 using Xunit;
 
 namespace Krautwatch.Infrastructure.Tests;
 
-public class DownloadJobRepositoryTests : IDisposable
+[Collection(PostgresCollection.Name)]
+public class DownloadJobRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
 {
-    // Keep one open in-memory connection; use a FRESH DbContext per operation, like the worker's
-    // per-poll scopes — otherwise ExecuteUpdate + a re-read on the same context returns a stale
-    // tracked entity.
-    private readonly SqliteConnection _conn;
-    private readonly DbContextOptions<AppDbContext> _options;
+    // Use a FRESH DbContext per operation, like the worker's per-poll scopes — otherwise
+    // ExecuteUpdate + a re-read on the same context returns a stale tracked entity.
+    private DbContextOptions<AppDbContext> _options = null!;
 
-    public DownloadJobRepositoryTests()
+    public async Task InitializeAsync()
     {
-        _conn = new SqliteConnection("Data Source=:memory:");
-        _conn.Open();
-        _options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(_conn).Options;
+        _options = await postgres.CreateDatabaseAsync();
 
-        using var db = new AppDbContext(_options);
-        db.Database.EnsureCreated();
+        await using var db = new AppDbContext(_options);
         db.Channels.Add(new Channel { Id = "zdf", Name = "ZDF", ProviderKey = "zdf" });
         db.Shows.Add(new Show { Id = "zdf:heute-show", Title = "heute-show", ChannelId = "zdf" });
         db.Episodes.Add(new Episode
@@ -32,8 +27,10 @@ public class DownloadJobRepositoryTests : IDisposable
             Id = "zdf:1", Title = "ep", ShowId = "zdf:heute-show",
             BroadcastDate = DateTimeOffset.UtcNow, Duration = TimeSpan.FromMinutes(30),
         });
-        db.SaveChanges();
+        await db.SaveChangesAsync();
     }
+
+    public Task DisposeAsync() => Task.CompletedTask;
 
     private DownloadJobRepository Repo() => new(new AppDbContext(_options));
 
@@ -116,5 +113,4 @@ public class DownloadJobRepositoryTests : IDisposable
         (await Repo().GetByIdAsync(id)).ShouldBeNull();
     }
 
-    public void Dispose() => _conn.Dispose();
 }

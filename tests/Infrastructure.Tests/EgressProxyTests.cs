@@ -6,7 +6,6 @@ using Krautwatch.Infrastructure.Downloads;
 using Krautwatch.Infrastructure.Jobs;
 using Krautwatch.Infrastructure.Persistence;
 using Krautwatch.Infrastructure.Proxies;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -16,19 +15,14 @@ using Xunit;
 
 namespace Krautwatch.Infrastructure.Tests;
 
-public class ProxyRepositoryTests : IDisposable
+[Collection(PostgresCollection.Name)]
+public class ProxyRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
 {
-    private readonly SqliteConnection _conn;
-    private readonly DbContextOptions<AppDbContext> _options;
+    private DbContextOptions<AppDbContext> _options = null!;
 
-    public ProxyRepositoryTests()
-    {
-        _conn = new SqliteConnection("Data Source=:memory:");
-        _conn.Open();
-        _options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(_conn).Options;
-        using var db = new AppDbContext(_options);
-        db.Database.EnsureCreated();
-    }
+    public async Task InitializeAsync() => _options = await postgres.CreateDatabaseAsync();
+
+    public Task DisposeAsync() => Task.CompletedTask;
 
     private ProxyRepository Repo() => new(new AppDbContext(_options));
 
@@ -76,8 +70,6 @@ public class ProxyRepositoryTests : IDisposable
 
         (await Repo().GetRankedAsync("DE", 10)).ShouldHaveSingleItem().Host.ShouldBe("de");
     }
-
-    public void Dispose() => _conn.Dispose();
 }
 
 public class GeoNodeProxyListSourceTests
