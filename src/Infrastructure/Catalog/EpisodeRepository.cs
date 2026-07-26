@@ -28,6 +28,13 @@ public class EpisodeRepository(AppDbContext db) : IEpisodeRepository
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<Episode>> GetRecentAsync(int limit, CancellationToken ct = default) =>
+        await db.Episodes
+            .Include(e => e.Show).ThenInclude(s => s.Channel)
+            .OrderByDescending(e => e.BroadcastDate)
+            .Take(limit)
+            .ToListAsync(ct);
+
     public async Task<IReadOnlyList<Episode>> GetByChannelAsync(
         string channelId,
         ContentType? contentType = null,

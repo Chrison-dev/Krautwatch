@@ -2,6 +2,7 @@ using FluentValidation;
 using Krautwatch.Application.Catalog;
 using Krautwatch.Application.Crawling;
 using Krautwatch.Application.Downloads;
+using Krautwatch.Application.Indexing;
 using Krautwatch.Application.Settings;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -32,6 +33,9 @@ public static class ApplicationServiceExtensions
 
         // Crawling — the Action handled by the broadcaster agents (Wolverine-discovered)
         services.AddScoped<CrawlShowHandler>();
+
+        // Indexing — the Newznab read side
+        services.AddScoped<SearchReleasesHandler>();
 
         // FluentValidation — all validators in this assembly
         services.AddValidatorsFromAssemblyContaining<SearchCatalogQueryValidator>();

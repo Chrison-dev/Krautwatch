@@ -20,6 +20,13 @@ builder.AddProject<Projects.Krautwatch_Web>("web")
     .WaitFor(api)
     .WithExternalHttpEndpoints();
 
+// Newznab indexer — the public *arr-facing surface (Newznab caps/search/RSS). Read-only.
+builder.AddProject<Projects.Krautwatch_Api_NewznabIndexerApi>("newznab")
+    .WithReference(db)
+    .WaitFor(db)
+    .WithHttpHealthCheck("/health")
+    .WithExternalHttpEndpoints();
+
 // ──────────────────────────────────────────────────────────────
 // Agents (DR-009) — per-broadcaster crawlers + the downloader, each an independently
 // deployable microservice sharing Postgres + the durable Wolverine message store.
