@@ -1,8 +1,11 @@
 using Krautwatch.Domain.Interfaces;
 using Krautwatch.Infrastructure.Catalog;
 using Krautwatch.Infrastructure.Catalog.MediathekView;
+using Krautwatch.Infrastructure.Crawling.Ard;
+using Krautwatch.Infrastructure.Crawling.Zdf;
 using Krautwatch.Infrastructure.Downloads;
 using Krautwatch.Infrastructure.Jobs;
+using Krautwatch.Infrastructure.Messaging;
 using Krautwatch.Infrastructure.Persistence;
 using Krautwatch.Infrastructure.Settings;
 using Krautwatch.Infrastructure.System;
@@ -46,6 +49,9 @@ public static class InfrastructureServiceExtensions
 
         // Download-queue port — the Application layer talks to this abstraction
         services.AddScoped<IDownloadQueue, NullDownloadQueue>();
+
+        // Dispatch port (DR-009 §5) — Wolverine adapter; the transport is configured at host level.
+        services.AddScoped<IMessageDispatcher, WolverineDispatcher>();
 
         // Repositories
         services.AddScoped<IEpisodeRepository, EpisodeRepository>();
@@ -94,6 +100,34 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<FilmlisteParser>();
         services.AddScoped<ICatalogProvider, MediathekViewProvider>();
 
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the ARD-platform crawlers (regular ARD + KiKA) behind the <see cref="IBroadcasterCrawler"/>
+    /// port, plus the typed <see cref="ArdCatalogClient"/> HTTP client. Wired by the ARD agent host.
+    /// </summary>
+    public static IServiceCollection AddArdCrawlers(this IServiceCollection services)
+    {
+        services.AddHttpClient<ArdCatalogClient>();
+        services.AddScoped<IBroadcasterCrawler>(sp =>
+            new ArdBroadcasterCrawler(sp.GetRequiredService<ArdCatalogClient>(),
+                providerKey: "ard", scope: "ard", channelName: "ARD"));
+        services.AddScoped<IBroadcasterCrawler>(sp =>
+            new ArdBroadcasterCrawler(sp.GetRequiredService<ArdCatalogClient>(),
+                providerKey: "kika", scope: "kika", channelName: "KiKA"));
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the ZDF crawler behind the <see cref="IBroadcasterCrawler"/> port, plus the typed
+    /// <see cref="ZdfCatalogClient"/> HTTP client. Wired by the ZDF agent host.
+    /// </summary>
+    public static IServiceCollection AddZdfCrawler(this IServiceCollection services)
+    {
+        services.AddHttpClient<ZdfCatalogClient>();
+        services.AddScoped<IBroadcasterCrawler>(sp =>
+            new ZdfBroadcasterCrawler(sp.GetRequiredService<ZdfCatalogClient>()));
         return services;
     }
 

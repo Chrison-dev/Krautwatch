@@ -1,3 +1,4 @@
+using System.Linq;
 using Krautwatch.Domain.Entities;
 using Krautwatch.Domain.Enums;
 using Krautwatch.Infrastructure.Catalog;
@@ -150,6 +151,72 @@ public class EpisodeRepositoryTests : IDisposable
         var result = await _sut.GetByIdAsync("ep-new-1");
         result.ShouldNotBeNull();
         result.Title.ShouldBe("New Episode");
+    }
+
+    [Fact]
+    public async Task UpsertManyAsync_FreshCrawlGraph_InsertsChannelShowEpisodeAndStream()
+    {
+        // A crawl produces a brand-new Channel/Show/Episode/Stream graph, with the same Channel and
+        // Show instance shared across episodes — the shape the broadcaster adapters emit.
+        var channel = new Channel { Id = "zdf", Name = "ZDF", ProviderKey = "zdf" };
+        var show = new Show { Id = "zdf:heute-show", Title = "heute-show", ChannelId = "zdf", Channel = channel };
+
+        var episodes = Enumerable.Range(1, 2).Select(i => new Episode
+        {
+            Id = $"zdf:doc-{i}",
+            Title = $"heute-show {i}",
+            ShowId = show.Id,
+            Show = show, // shared instance across the batch
+            BroadcastDate = DateTimeOffset.UtcNow.AddDays(-i),
+            Duration = TimeSpan.FromMinutes(30),
+            Streams =
+            [
+                new EpisodeStream
+                {
+                    Id = $"zdf:doc-{i}:v",
+                    EpisodeId = $"zdf:doc-{i}",
+                    Quality = VideoQuality.High,
+                    Url = $"https://cdn.zdf.de/doc-{i}.mp4",
+                    Format = "mp4"
+                }
+            ]
+        }).ToList();
+
+        await _sut.UpsertManyAsync(episodes);
+
+        (await _db.Channels.FindAsync("zdf")).ShouldNotBeNull();
+        (await _db.Shows.FindAsync("zdf:heute-show")).ShouldNotBeNull();
+
+        var persisted = await _sut.GetByIdAsync("zdf:doc-1");
+        persisted.ShouldNotBeNull();
+        persisted.Show.Channel.Name.ShouldBe("ZDF");
+        persisted.Streams.ShouldHaveSingleItem().Url.ShouldBe("https://cdn.zdf.de/doc-1.mp4");
+    }
+
+    [Fact]
+    public async Task UpsertManyAsync_RecrawlSameEpisode_UpdatesInPlaceWithoutDuplicating()
+    {
+        var channel = new Channel { Id = "ardx", Name = "ARD", ProviderKey = "ardx" };
+        var show = new Show { Id = "ardx:extra-3", Title = "extra 3", ChannelId = "ardx", Channel = channel };
+        Episode Build(string title) => new()
+        {
+            Id = "ardx:ep-x",
+            Title = title,
+            ShowId = show.Id,
+            Show = show,
+            BroadcastDate = DateTimeOffset.UtcNow,
+            Duration = TimeSpan.FromMinutes(44),
+            Streams =
+            [
+                new EpisodeStream { Id = "ardx:ep-x:v", EpisodeId = "ardx:ep-x", Quality = VideoQuality.High, Url = "https://cdn/x.mp4", Format = "mp4" }
+            ]
+        };
+
+        await _sut.UpsertManyAsync([Build("first title")]);
+        await _sut.UpsertManyAsync([Build("updated title")]);
+
+        var all = await _sut.GetByShowAsync("ardx:extra-3");
+        all.ShouldHaveSingleItem().Title.ShouldBe("updated title");
     }
 
     public void Dispose()

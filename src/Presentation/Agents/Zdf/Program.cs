@@ -1,10 +1,11 @@
 using Krautwatch.Application;
+using Krautwatch.Application.Crawling;
 using Krautwatch.Infrastructure;
 using Wolverine;
 using Wolverine.Postgresql;
 
-// Krautwatch Zdf agent (DR-009). A microservice host wired to Postgres + durable Wolverine;
-// the behaviour is filled in by the Application/Crawling slices in a later increment.
+// Krautwatch Zdf agent (DR-009). A microservice host crawling the ZDF Mediathek into Postgres via
+// the Application/Crawling Action, over the durable Wolverine bus.
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
@@ -20,14 +21,25 @@ builder.Services.AddInfrastructure(new DbProviderOptions
 });
 builder.Services.AddApplication();
 
+// ZDF crawler behind the IBroadcasterCrawler port.
+builder.Services.AddZdfCrawler();
+
+// Crawl schedule — bound from the "Crawl" config section; seeded with the show proven live (PR #34).
+var crawlOptions = new CrawlOptions();
+builder.Configuration.GetSection(CrawlOptions.SectionName).Bind(crawlOptions);
+if (crawlOptions.Targets.Count == 0)
+    crawlOptions.Targets = [new CrawlTarget("zdf", "heute-show")];
+builder.Services.AddSingleton(crawlOptions);
+builder.Services.AddHostedService<CrawlSchedulerService>();
+
 // Durable Wolverine (Postgres transport) — the shared message store with the API + other agents.
 builder.UseWolverine(opts =>
 {
     opts.PersistMessagesWithPostgresql(connectionString);
     opts.Policies.UseDurableLocalQueues();
+    // Discover the Crawling Action (CrawlShowHandler) in the Application assembly.
+    opts.Discovery.IncludeAssembly(typeof(CrawlShowCommand).Assembly);
 });
-
-// TODO (#3): register the ZDF crawl Action and schedule it (Application/Crawling/Zdf).
 
 var app = builder.Build();
 

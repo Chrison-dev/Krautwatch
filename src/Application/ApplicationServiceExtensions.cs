@@ -1,5 +1,6 @@
 using FluentValidation;
 using Krautwatch.Application.Catalog;
+using Krautwatch.Application.Crawling;
 using Krautwatch.Application.Downloads;
 using Krautwatch.Application.Settings;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,6 +29,9 @@ public static class ApplicationServiceExtensions
         // Settings
         services.AddScoped<GetSettingsHandler>();
         services.AddScoped<SaveSettingsHandler>();
+
+        // Crawling — the Action handled by the broadcaster agents (Wolverine-discovered)
+        services.AddScoped<CrawlShowHandler>();
 
         // FluentValidation — all validators in this assembly
         services.AddValidatorsFromAssemblyContaining<SearchCatalogQueryValidator>();
