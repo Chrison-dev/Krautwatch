@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Api\Krautwatch.Api.csproj" />
     <ProjectReference Include="..\Web\Krautwatch.Web.csproj" />
   </ItemGroup>
