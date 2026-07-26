@@ -14,5 +14,6 @@
     <Project Path="tests/Domain.Tests/Krautwatch.Domain.Tests.csproj" />
     <Project Path="tests/Application.Tests/Krautwatch.Application.Tests.csproj" />
     <Project Path="tests/Infrastructure.Tests/Krautwatch.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Architecture.Tests/Krautwatch.Architecture.Tests.csproj" />
   </Folder>
 </Solution>
