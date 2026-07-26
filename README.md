@@ -20,9 +20,12 @@ Built on .NET 10, Postgres, Wolverine and .NET Aspire.
 ## Prerequisites
 
 - **.NET 10 SDK** (`10.0.100+`, see `global.json`)
-- **.NET Aspire workload** — `dotnet workload install aspire`
-- **Docker** — Aspire provisions the Postgres container
+- **Docker** — Aspire provisions the Postgres container, and the repository tests use Testcontainers
 - **ffmpeg** on PATH — `brew install ffmpeg` (used to remux HLS streams; the Downloader image bundles it)
+
+> No Aspire *workload* install is needed. Aspire 13 comes in via the `Aspire.AppHost.Sdk` reference in
+> `Krautwatch.AppHost.csproj` plus NuGet packages — the old `dotnet workload install aspire` step is
+> legacy and does not apply.
 
 ---
 

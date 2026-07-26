@@ -25,7 +25,7 @@ public class RefreshProxyListHandlerTests
         await new RefreshProxyListHandler(source, repo, NullLogger<RefreshProxyListHandler>.Instance).HandleAsync();
 
         await repo.Received(1).UpsertBatchAsync(
-            Arg.Is<IEnumerable<Proxy>>(ps => ps.Count() == 2), Arg.Any<CancellationToken>());
+            Arg.Is<IEnumerable<Proxy>>(ps => ps != null && ps.Count() == 2), Arg.Any<CancellationToken>());
     }
 
     [Fact]

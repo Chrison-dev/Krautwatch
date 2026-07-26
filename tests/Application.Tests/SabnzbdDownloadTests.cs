@@ -67,7 +67,7 @@ public class AddDownloadByTokenHandlerTests
         var jobId = await new AddDownloadByTokenHandler(episodes, jobs, queue).HandleAsync("zdf:1");
 
         jobId.ShouldNotBeNull();
-        await jobs.Received(1).AddAsync(Arg.Is<DownloadJob>(j => j.EpisodeId == "zdf:1" && j.StreamUrl == "https://cdn/x.mp4"), Arg.Any<CancellationToken>());
+        await jobs.Received(1).AddAsync(Arg.Is<DownloadJob>(j => j != null && j.EpisodeId == "zdf:1" && j.StreamUrl == "https://cdn/x.mp4"), Arg.Any<CancellationToken>());
         await queue.Received(1).EnqueueAsync(jobId!.Value, "https://cdn/x.mp4", Arg.Any<CancellationToken>());
     }
 
@@ -82,7 +82,7 @@ public class AddDownloadByTokenHandlerTests
 
         await new AddDownloadByTokenHandler(episodes, jobs, queue).HandleAsync("kika:1");
 
-        await jobs.Received(1).AddAsync(Arg.Is<DownloadJob>(j => j.GeoRestricted), Arg.Any<CancellationToken>());
+        await jobs.Received(1).AddAsync(Arg.Is<DownloadJob>(j => j != null && j.GeoRestricted), Arg.Any<CancellationToken>());
     }
 
     [Fact]

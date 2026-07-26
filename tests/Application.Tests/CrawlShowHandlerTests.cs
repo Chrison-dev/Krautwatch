@@ -46,7 +46,7 @@ public class CrawlShowHandlerTests
         zdf.LastQuery.ShouldBe("heute-show");
         otherProvider.LastQuery.ShouldBeNull(); // the ARD crawler must not be invoked
         await repo.Received(1).UpsertManyAsync(
-            Arg.Is<IEnumerable<Episode>>(e => e.Count() == 2), Arg.Any<CancellationToken>());
+            Arg.Is<IEnumerable<Episode>>(e => e != null && e.Count() == 2), Arg.Any<CancellationToken>());
     }
 
     [Fact]
