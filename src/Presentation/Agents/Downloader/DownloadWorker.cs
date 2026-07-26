@@ -4,18 +4,20 @@ using Krautwatch.Domain.Interfaces;
 namespace Krautwatch.Agents.Downloader;
 
 /// <summary>
-/// Polls the durable job table for the next Queued download and runs it. The <see cref="DownloadJob"/>
-/// row is the work queue (its phase-transition + WorkerId design is built for a claiming worker), so
-/// no cross-process bus is needed — a scale-out later can move to a Postgres/RabbitMQ transport.
+/// Drives downloads off the durable job table: reclaims anything this worker left mid-flight on a
+/// previous crash, then repeatedly claims the next Queued job (atomically, so multiple instances are
+/// safe) and runs it. The <see cref="DownloadJob"/> row is the work queue — no messaging bus needed.
 /// </summary>
 public sealed class DownloadWorker(IServiceScopeFactory scopeFactory, ILogger<DownloadWorker> logger)
     : BackgroundService
 {
+    internal static readonly string WorkerId = $"downloader-{Environment.MachineName}";
     private static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(10);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        logger.LogInformation("Download worker started.");
+        await ReclaimStaleAsync(stoppingToken);
+        logger.LogInformation("Download worker {WorkerId} started.", WorkerId);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -24,15 +26,15 @@ public sealed class DownloadWorker(IServiceScopeFactory scopeFactory, ILogger<Do
                 using var scope = scopeFactory.CreateScope();
                 var jobs = scope.ServiceProvider.GetRequiredService<IDownloadJobRepository>();
 
-                var next = await jobs.GetNextQueuedAsync(stoppingToken);
-                if (next is null)
+                var job = await jobs.TryClaimNextAsync(WorkerId, stoppingToken);
+                if (job is null)
                 {
                     await Task.Delay(IdleDelay, stoppingToken);
                     continue;
                 }
 
                 var runner = scope.ServiceProvider.GetRequiredService<RunDownloadHandler>();
-                await runner.HandleAsync(next.Id, stoppingToken);
+                await runner.HandleAsync(job, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -47,5 +49,21 @@ public sealed class DownloadWorker(IServiceScopeFactory scopeFactory, ILogger<Do
         }
 
         logger.LogInformation("Download worker stopping.");
+    }
+
+    private async Task ReclaimStaleAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var jobs = scope.ServiceProvider.GetRequiredService<IDownloadJobRepository>();
+            var reclaimed = await jobs.ReclaimStaleAsync(WorkerId, ct);
+            if (reclaimed > 0)
+                logger.LogInformation("Reclaimed {Count} stale download(s) from a previous run.", reclaimed);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Stale-download reclaim failed.");
+        }
     }
 }

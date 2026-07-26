@@ -8,8 +8,21 @@ public interface IDownloadJobRepository
     Task<DownloadJob?> GetByIdAsync(Guid id, CancellationToken ct = default);
     Task<IReadOnlyList<DownloadJob>> GetAllAsync(CancellationToken ct = default);
     Task<IReadOnlyList<DownloadJob>> GetByStatusAsync(DownloadStatus status, CancellationToken ct = default);
-    Task<DownloadJob?> GetNextQueuedAsync(CancellationToken ct = default);
     Task<IReadOnlyList<DownloadJob>> GetByWorkerIdAsync(string workerId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Atomically claims the oldest Queued job for <paramref name="workerId"/> (Queued → Downloading)
+    /// and returns it, or null if none. Safe under concurrent Downloader instances — the claim is a
+    /// conditional update, so at most one worker wins a given job.
+    /// </summary>
+    Task<DownloadJob?> TryClaimNextAsync(string workerId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Resets jobs left Downloading by this worker (from a previous crash) back to Queued so they run
+    /// again. Called once on Downloader startup.
+    /// </summary>
+    Task<int> ReclaimStaleAsync(string workerId, CancellationToken ct = default);
+
     Task AddAsync(DownloadJob job, CancellationToken ct = default);
     Task UpdateAsync(DownloadJob job, CancellationToken ct = default);
 }
