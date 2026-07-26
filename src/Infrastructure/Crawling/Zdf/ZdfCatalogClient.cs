@@ -98,6 +98,30 @@ public sealed class ZdfCatalogClient(HttpClient http)
         return best;
     }
 
+    /// <summary>Fetch a single ZDF episode's full program data (doc metadata + resolved progressive MP4).</summary>
+    public async Task<EpisodeDetail?> FetchEpisodeDetailAsync(ZdfEpisode episode, CancellationToken ct = default)
+    {
+        using var doc = await GetJsonAsync($"{ApiBase}{episode.Canonical}", ct);
+        if (doc is null) return null;
+        var root = doc.RootElement;
+
+        var title = Str(root, "title") ?? episode.Title;
+        var show = root.TryGetProperty("http://zdf.de/rels/brand", out var brand) && brand.TryGetProperty("title", out var bt)
+            ? bt.GetString() ?? episode.Query : episode.Query;
+        DateTimeOffset? airDate = root.TryGetProperty("editorialDate", out var ed) && ed.ValueKind == JsonValueKind.String
+            ? DateTimeOffset.Parse(ed.GetString()!) : episode.EditorialDate;
+        var synopsis = Str(root, "leadParagraph");
+
+        var duration = TimeSpan.Zero;
+        if (root.TryGetProperty("mainVideoContent", out var mvc) && mvc.TryGetProperty(RelTarget, out var tgt)
+            && tgt.TryGetProperty("duration", out var du) && du.ValueKind == JsonValueKind.Number)
+            duration = TimeSpan.FromSeconds(du.GetInt32());
+
+        var stream = await ResolveBestMp4Async(episode.Canonical, ct);
+
+        return new EpisodeDetail(title, show, "ZDF", airDate, duration, synopsis, stream?.Url, SubtitleUrl: null);
+    }
+
     private static string? FindPtmdTemplate(JsonElement root)
     {
         // Prefer mainVideoContent → target → streams.default; fall back to any ptmd-template.
@@ -136,9 +160,3 @@ public sealed class ZdfCatalogClient(HttpClient http)
     }
 }
 
-file static class JsonExtensions
-{
-    public static IEnumerable<JsonElement> GetPropertyOrEmptyArray(this JsonElement e, string name) =>
-        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Array
-            ? v.EnumerateArray() : [];
-}
