@@ -15,11 +15,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > **⚠️ Architecture reset in progress (DR-009).** The solution has been renamed
 > **MediathekNext → Krautwatch** and reshaped into the layers below (Presentation fleet in place;
-> `CoreWorker`/`Worker` role hosts dropped). Postgres + durable Wolverine (Postgres transport) are wired and the API runs EF migrations at
-> startup. The **ARD (+KiKA) and ZDF agents crawl their configured shows into Postgres** via the
+> `CoreWorker`/`Worker` role hosts dropped). Postgres + durable Wolverine (Postgres transport) are wired and a
+> run-to-completion **Migrator** owns EF migrations. The **ARD (+KiKA) and ZDF agents crawl their configured shows into Postgres** via the
 > `Application/Crawling` Action (broadcaster clients behind the `IBroadcasterCrawler` port; the
 > scheduler dispatches `CrawlShowCommand` through the `IMessageDispatcher` port over the durable bus).
-> Still to come: the **Newznab/SABnzbd** API surface and the Downloader agent's real ffmpeg pull.
+> The **Newznab indexer + SABnzbd download client** are live (`Api/NewznabIndexerApi`); the pre-DR-010
+> browser (`Api/PublicApi` + `Web`) is retired. Still to come: the Downloader agent's real ffmpeg pull.
 > The superseded `docker/` topology (DR-004) is dead and will be replaced by Aspire-generated
 > compose in the distribution milestone.
 
@@ -80,15 +81,20 @@ Commands persist; Queries read. A new file goes in `Application/<Slice>/<Action|
 
 ```
 Presentation/
-├── AppHost/          .NET Aspire — the single dev entry point (`dotnet run`) that runs the fleet
-├── ServiceDefaults/  OTel / health, shared by every host
-├── Api/              Newznab + SABnzbd + RSS  (the *arr-facing surface)   → Queries + Commands
-├── Web/              Blazor instance-config UI
-└── Agents/           (was "Worker")                                        → Actions
-    ├── Ard/          ARD (+ KiKA) crawler agent
-    ├── Zdf/          ZDF crawler agent
-    └── Downloader/   ffmpeg download execution
+├── AppHost/               .NET Aspire — the single dev entry point (`dotnet run`) that runs the fleet
+├── ServiceDefaults/       OTel / health, shared by every host
+├── Migrator/              run-to-completion EF-migration owner; consumers WaitForCompletion it
+├── Api/
+│   └── NewznabIndexerApi/ Newznab (indexer) + SABnzbd (download client) — the public *arr-facing surface
+└── Agents/                (was "Worker")                                   → Actions
+    ├── Ard/               ARD (+ KiKA) crawler agent
+    ├── Zdf/               ZDF crawler agent
+    └── Downloader/        ffmpeg download execution
 ```
+
+> The pre-DR-010 browser product (`Api/PublicApi` internal JSON API + the `Web` Blazor browse UI) was
+> retired — Sonarr/Radarr drive Krautwatch now (DR-010), so there is no first-party browse surface. A
+> genuine *arr **config** UI (Sonarr/Radarr instances, apikey) is future greenfield work.
 
 Each host is an **independently deployable microservice** from day one. **Adding a broadcaster** =
 a new `Application/<Broadcaster>` slice + an Infrastructure HTTP client + a `Presentation/Agents/<Broadcaster>` host.
@@ -108,18 +114,19 @@ dotnet test                                    # all tests (incl. Architecture)
 dotnet run --project src/Presentation/AppHost
 
 # EF Core migrations — model lives in Infrastructure, a host is the startup project
-dotnet ef migrations add <Name> \
-  --project src/Infrastructure --startup-project src/Presentation/Api
+# The model + design-time factory live in Infrastructure; no startup project needed.
+dotnet ef migrations add <Name> --project src/Infrastructure --context AppDbContext
 ```
 
 System dependency: **ffmpeg** on PATH (the Downloader agent's image bundles it).
 
 ## Tech stack
 
-- **.NET 10** (DR-007), C# 14. ASP.NET Core Minimal APIs, Blazor.
+- **.NET 10** (DR-007), C# 14. ASP.NET Core Minimal APIs.
 - **EF Core 10 + Npgsql** (Postgres).
 - **WolverineFx** — messaging/mediator/outbox (Postgres transport default, RabbitMQ opt-in).
 - **.NET Aspire** — dev orchestration + docker-compose generation (DR-003).
+- **Mapperly** — source-generated entity↔DTO mapping.
 - **OpenTelemetry** — logs/metrics/traces; Prometheus `/metrics`, Grafana in prod (DR-006).
 - **FluentValidation**; tests on **xUnit + Shouldly + NSubstitute + ArchUnitNET**.
 
