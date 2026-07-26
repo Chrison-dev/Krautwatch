@@ -1,13 +1,14 @@
-using Krautwatch.Domain.Enums;
+using Krautwatch.Domain.Entities;
 using Krautwatch.Domain.Interfaces;
 using Microsoft.Extensions.Logging;
 
 namespace Krautwatch.Application.Downloads;
 
 /// <summary>
-/// The download <b>Action</b> (DR-009): IO-driven orchestration run by the Downloader agent. Claims a
-/// queued job, pulls it via the <see cref="IDownloadProvider"/> port, and records the terminal state
-/// (Completed with the output path/size, or DownloadFailed with the reason).
+/// The download <b>Action</b> (DR-009): IO-driven orchestration run by the Downloader agent on a job
+/// the repository has already atomically claimed (Downloading). It pulls the stream via the
+/// <see cref="IDownloadProvider"/> port, persists progress periodically, and records the terminal
+/// state (Completed with the output path/size, or DownloadFailed with the reason).
 /// </summary>
 public class RunDownloadHandler(
     IDownloadJobRepository jobs,
@@ -15,13 +16,12 @@ public class RunDownloadHandler(
     ISettingsRepository settings,
     ILogger<RunDownloadHandler> logger)
 {
-    private static readonly string WorkerId = $"downloader-{Environment.MachineName}";
+    // How often the download's progress is flushed to the DB (so Sonarr's queue shows a live %),
+    // kept coarse to avoid a write per read.
+    private static readonly TimeSpan ProgressInterval = TimeSpan.FromSeconds(5);
 
-    public async Task HandleAsync(Guid jobId, CancellationToken ct = default)
+    public async Task HandleAsync(DownloadJob job, CancellationToken ct = default)
     {
-        var job = await jobs.GetByIdAsync(jobId, ct);
-        if (job is null || job.Status != DownloadStatus.Queued) return; // already claimed / gone
-
         if (job.Episode is null)
         {
             job.MarkDownloadFailed("Episode metadata missing — cannot resolve an output path.");
@@ -29,21 +29,32 @@ public class RunDownloadHandler(
             return;
         }
 
-        // Claim first so a second poll can't pick the same job (status → Downloading).
-        job.MarkClaiming(WorkerId);
-        await jobs.UpdateAsync(job, ct);
-
         var directory = (await settings.GetAsync(ct)).DownloadDirectory;
+
+        // The provider reports on a threadpool thread; only stash the latest value here (no DB work).
+        var latest = 0.0;
+        var progress = new Progress<double>(p => latest = p);
 
         try
         {
-            var result = await provider.DownloadAsync(job, directory, new Progress<double>(), ct);
+            var download = provider.DownloadAsync(job, directory, progress, ct);
+            while (!download.IsCompleted)
+            {
+                var finished = await Task.WhenAny(download, Task.Delay(ProgressInterval, ct));
+                if (finished != download)
+                {
+                    job.UpdateProgress(latest);
+                    await jobs.UpdateAsync(job, ct);
+                }
+            }
+
+            var result = await download;
             job.MarkCompleted(result.OutputPath, result.SizeBytes);
             logger.LogInformation("Download {JobId} completed: {Path}", job.Id, result.OutputPath);
         }
         catch (OperationCanceledException)
         {
-            throw; // shutdown — leave the job Downloading for a future stale-job reclaim
+            throw; // shutdown — leave the job Downloading; startup reclaim requeues it
         }
         catch (Exception ex)
         {
