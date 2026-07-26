@@ -23,7 +23,8 @@ public static class ApplicationServiceExtensions
         // Downloads
         services.AddScoped<StartDownloadHandler>();
         services.AddScoped<AddDownloadByTokenHandler>();
-        services.AddScoped<RunDownloadHandler>();
+        // NB: RunDownloadHandler is registered by the Downloader host only — it needs IDownloadProvider,
+        // which no other host provides.
         services.AddScoped<CancelDownloadHandler>();
         services.AddScoped<RetryDownloadHandler>();
         services.AddScoped<GetDownloadQueueHandler>();

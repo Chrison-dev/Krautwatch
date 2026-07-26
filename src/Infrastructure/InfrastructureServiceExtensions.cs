@@ -50,9 +50,6 @@ public static class InfrastructureServiceExtensions
         // Download-queue port — the Application layer talks to this abstraction
         services.AddScoped<IDownloadQueue, NullDownloadQueue>();
 
-        // Dispatch port (DR-009 §5) — Wolverine adapter; the transport is configured at host level.
-        services.AddScoped<IMessageDispatcher, WolverineDispatcher>();
-
         // Repositories
         services.AddScoped<IEpisodeRepository, EpisodeRepository>();
         services.AddScoped<IDownloadJobRepository, DownloadJobRepository>();
@@ -128,6 +125,16 @@ public static class InfrastructureServiceExtensions
         services.AddHttpClient<ZdfCatalogClient>();
         services.AddScoped<IBroadcasterCrawler>(sp =>
             new ZdfBroadcasterCrawler(sp.GetRequiredService<ZdfCatalogClient>()));
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the Wolverine-backed <see cref="IMessageDispatcher"/> (DR-009 §5). Call only from a
+    /// host that has configured Wolverine (<c>UseWolverine</c>) — i.e. the crawl agents.
+    /// </summary>
+    public static IServiceCollection AddMessageDispatcher(this IServiceCollection services)
+    {
+        services.AddScoped<IMessageDispatcher, WolverineDispatcher>();
         return services;
     }
 

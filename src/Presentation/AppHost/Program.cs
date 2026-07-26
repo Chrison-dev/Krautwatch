@@ -21,6 +21,13 @@ builder.AddProject<Projects.Krautwatch_Api_NewznabIndexerApi>("newznab")
     .WithHttpHealthCheck("/health")
     .WithExternalHttpEndpoints();
 
+// Standalone UI — search / download / monitor without a Sonarr/Radarr instance (Blazor Server).
+builder.AddProject<Projects.Krautwatch_Web>("web")
+    .WithReference(db)
+    .WaitFor(db)
+    .WaitForCompletion(migrator)
+    .WithExternalHttpEndpoints();
+
 // ──────────────────────────────────────────────────────────────
 // Agents (DR-009) — per-broadcaster crawlers + the downloader, each an independently
 // deployable microservice sharing Postgres + the durable Wolverine message store.

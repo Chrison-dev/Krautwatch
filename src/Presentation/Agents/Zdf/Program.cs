@@ -23,6 +23,7 @@ builder.Services.AddApplication();
 
 // ZDF crawler behind the IBroadcasterCrawler port.
 builder.Services.AddZdfCrawler();
+builder.Services.AddMessageDispatcher(); // Wolverine dispatch for the scheduler (this host has Wolverine)
 
 // Crawl schedule — bound from the "Crawl" config section; seeded with the show proven live (PR #34).
 var crawlOptions = new CrawlOptions();
