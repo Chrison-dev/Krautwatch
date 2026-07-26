@@ -32,6 +32,13 @@ internal static class EpisodeMapper
     public static Episode Episode(string providerKey, Show show, string nativeId, EpisodeDetail detail)
     {
         var id = $"{providerKey}:{nativeId}";
+
+        // Sonarr numbering: if the title encodes a season/episode, record it and mark the show
+        // Standard; otherwise it stays Daily (air-date matched).
+        var (season, number) = EpisodeNumbering.Parse(detail.Title);
+        if (season is not null && number is not null)
+            show.SeriesType = SeriesType.Standard;
+
         var episode = new Episode
         {
             Id = id,
@@ -42,6 +49,8 @@ internal static class EpisodeMapper
             BroadcastDate = detail.AirDate ?? DateTimeOffset.MinValue,
             Duration = detail.Duration,
             ContentType = ContentType.Episode,
+            SeasonNumber = season,
+            EpisodeNumber = number,
         };
 
         if (!string.IsNullOrWhiteSpace(detail.StreamUrl))

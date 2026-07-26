@@ -45,6 +45,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithOne(x => x.Show)
                 .HasForeignKey(x => x.ShowId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // Sonarr model — matching regime (stored as text like the other enums)
+            e.Property(x => x.SeriesType)
+                .HasConversion(v => v.ToString(), v => Enum.Parse<SeriesType>(v))
+                .HasMaxLength(20);
         });
 
         // --------------------------------------------------------
@@ -85,6 +90,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasIndex(x => x.ShowId);
             e.HasIndex(x => x.BroadcastDate);
             e.HasIndex(x => x.ContentType);
+            // Newznab season/episode lookups (Standard series)
+            e.HasIndex(x => new { x.ShowId, x.SeasonNumber, x.EpisodeNumber });
         });
 
         // --------------------------------------------------------

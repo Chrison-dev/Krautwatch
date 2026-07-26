@@ -13,5 +13,12 @@ public class Episode
     public TimeSpan Duration { get; init; }
     public DateTimeOffset? AvailableUntil { get; init; }
     public ContentType ContentType { get; init; } = ContentType.Episode;
+
+    // Sonarr numbering model — populated when the broadcaster exposes it; null for pure Daily
+    // (air-date-matched) content. BroadcastDate is the air-date key for the Daily regime.
+    public int? SeasonNumber { get; init; }
+    public int? EpisodeNumber { get; init; }
+    public int? AbsoluteEpisodeNumber { get; init; }
+
     public ICollection<EpisodeStream> Streams { get; init; } = new List<EpisodeStream>();
 }
