@@ -10,6 +10,11 @@
     <Project Path="src/Presentation/Api/Krautwatch.Api.csproj" />
     <Project Path="src/Presentation/Web/Krautwatch.Web.csproj" />
   </Folder>
+  <Folder Name="/src/Presentation/Agents/">
+    <Project Path="src/Presentation/Agents/Ard/Krautwatch.Agents.Ard.csproj" />
+    <Project Path="src/Presentation/Agents/Zdf/Krautwatch.Agents.Zdf.csproj" />
+    <Project Path="src/Presentation/Agents/Downloader/Krautwatch.Agents.Downloader.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Domain.Tests/Krautwatch.Domain.Tests.csproj" />
     <Project Path="tests/Application.Tests/Krautwatch.Application.Tests.csproj" />
