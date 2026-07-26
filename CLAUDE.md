@@ -21,9 +21,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > scheduler dispatches `CrawlShowCommand` through the `IMessageDispatcher` port over the durable bus).
 > The **Newznab indexer + SABnzbd download client** are live (`Api/NewznabIndexerApi`); the pre-DR-010
 > browser (`Api/PublicApi` + `Web`) is retired. The **Downloader agent** polls the durable job table and
-> pulls each stream to disk as a raw progressive MP4 (ffmpeg / HLS remux stays a deferred orchestration
-> step). The superseded `docker/` topology (DR-004) is dead and will be replaced by Aspire-generated
-> compose in the distribution milestone.
+> pulls each stream to disk, routing by type: a raw byte copy for progressive MP4, or an ffmpeg remux
+> (`-c copy`) for HLS. The superseded `docker/` topology (DR-004) is dead and will be replaced by
+> Aspire-generated compose in the distribution milestone.
 
 ## Architecture (DR-009 — read `docs/architecture/DR-009` before structural changes)
 
@@ -90,7 +90,7 @@ Presentation/
 └── Agents/                (was "Worker")                                   → Actions
     ├── Ard/               ARD (+ KiKA) crawler agent
     ├── Zdf/               ZDF crawler agent
-    └── Downloader/        polls the job table → raw progressive-MP4 download (ffmpeg deferred)
+    └── Downloader/        polls the job table → raw MP4 copy, or ffmpeg remux for HLS
 ```
 
 > The pre-DR-010 browser product (`Api/PublicApi` internal JSON API + the `Web` Blazor browse UI) was
