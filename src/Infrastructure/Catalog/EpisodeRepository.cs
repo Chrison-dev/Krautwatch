@@ -19,6 +19,7 @@ public class EpisodeRepository(AppDbContext db) : IEpisodeRepository
         var lower = query.ToLower();
         return await db.Episodes
             .Include(e => e.Show).ThenInclude(s => s.Channel)
+            .Include(e => e.Streams)
             .Where(e =>
                 e.Title.ToLower().Contains(lower) ||
                 (e.Description != null && e.Description.ToLower().Contains(lower)) ||

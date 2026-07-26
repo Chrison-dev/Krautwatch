@@ -25,9 +25,9 @@ var app = builder.Build();
 if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/error", createScopeForErrors: true);
 
-app.UseStaticFiles();
 app.UseAntiforgery();
 
+app.MapStaticAssets(); // serves wwwroot + the framework's blazor.web.js (.NET 10 static assets)
 app.MapDefaultEndpoints(); // /health, /alive from ServiceDefaults
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
