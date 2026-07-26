@@ -25,7 +25,8 @@
       "type": "string",
       "enum": [
         "Compile",
-        "Test"
+        "Test",
+        "TestLive"
       ]
     },
     "Verbosity": {
