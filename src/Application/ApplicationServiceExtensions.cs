@@ -23,6 +23,7 @@ public static class ApplicationServiceExtensions
         // Downloads
         services.AddScoped<StartDownloadHandler>();
         services.AddScoped<AddDownloadByTokenHandler>();
+        services.AddScoped<RunDownloadHandler>();
         services.AddScoped<CancelDownloadHandler>();
         services.AddScoped<RetryDownloadHandler>();
         services.AddScoped<GetDownloadQueueHandler>();
