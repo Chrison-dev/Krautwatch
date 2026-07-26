@@ -98,6 +98,56 @@ public sealed class ArdCatalogClient(HttpClient http)
         return preferred.Count > 0 ? preferred : fallback;
     }
 
+    /// <summary>Fetch a single episode's full program data (item page: metadata + progressive MP4 + subtitle).</summary>
+    public async Task<EpisodeDetail?> FetchEpisodeDetailAsync(ArdEpisode episode, CancellationToken ct = default)
+    {
+        using var doc = await GetJsonAsync(episode.ItemHref, ct);
+        if (doc is null || !doc.RootElement.TryGetProperty("widgets", out var widgets)) return null;
+
+        JsonElement w = default;
+        foreach (var candidate in widgets.EnumerateArray()) { w = candidate; break; }
+        if (w.ValueKind != JsonValueKind.Object) return null;
+
+        var title = TitleOf(w) ?? episode.Title;
+        var broadcaster = w.TryGetProperty("publicationService", out var ps) && ps.TryGetProperty("name", out var bn)
+            ? bn.GetString() ?? "ARD" : "ARD";
+        DateTimeOffset? airDate = w.TryGetProperty("broadcastedOn", out var b) && b.ValueKind == JsonValueKind.String
+            ? DateTimeOffset.Parse(b.GetString()!) : episode.BroadcastedOn;
+        var synopsis = w.TryGetProperty("synopsis", out var sy) && sy.ValueKind == JsonValueKind.String ? sy.GetString() : null;
+
+        var (streamUrl, subtitleUrl) = ParseMedia(w);
+
+        return new EpisodeDetail(title, episode.ShowTitle, broadcaster, airDate, episode.Duration, synopsis, streamUrl, subtitleUrl);
+    }
+
+    // mcV6: mediaCollection.embedded.streams[].media[] (video/mp4 by resolution) + subtitles[].sources[] (webvtt).
+    private static (string? Stream, string? Subtitle) ParseMedia(JsonElement widget)
+    {
+        if (!widget.TryGetProperty("mediaCollection", out var mcOuter) ||
+            !mcOuter.TryGetProperty("embedded", out var mc)) return (null, null);
+
+        string? bestMp4 = null; var bestRes = -1;
+        if (mc.TryGetProperty("streams", out var streams))
+            foreach (var s in streams.EnumerateArray())
+            foreach (var m in s.GetPropertyOrEmptyArray("media"))
+            {
+                var mime = m.TryGetProperty("mimeType", out var mt) ? mt.GetString() : null;
+                if (mime != "video/mp4") continue;
+                var res = m.TryGetProperty("maxHResolutionPx", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetInt32() : 0;
+                var url = m.TryGetProperty("url", out var u) ? u.GetString() : null;
+                if (url is not null && res > bestRes) { bestRes = res; bestMp4 = url; }
+            }
+
+        string? subtitle = null;
+        if (mc.TryGetProperty("subtitles", out var subs))
+            foreach (var sub in subs.EnumerateArray())
+            foreach (var src in sub.GetPropertyOrEmptyArray("sources"))
+                if (src.TryGetProperty("kind", out var k) && k.GetString() == "webvtt" &&
+                    src.TryGetProperty("url", out var su)) { subtitle = su.GetString(); break; }
+
+        return (bestMp4, subtitle);
+    }
+
     private static ArdEpisode? ToEpisode(JsonElement teaser, string showTitle)
     {
         if (!teaser.TryGetProperty("links", out var links) ||
