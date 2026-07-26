@@ -32,4 +32,5 @@ public record DownloadJobResponse(
     DateTimeOffset CreatedAt,
     DateTimeOffset? StartedAt,
     DateTimeOffset? CompletedAt,
-    bool Active);           // true while pre-terminal — splits the SABnzbd queue from history
+    bool Active,            // true while pre-terminal — splits the SABnzbd queue from history
+    bool GeoRestricted);    // DACH-only asset — fetched via egress proxy (#45)

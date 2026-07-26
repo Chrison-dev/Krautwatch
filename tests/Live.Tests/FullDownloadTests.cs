@@ -39,15 +39,21 @@ public class FullDownloadTests
         await DownloadAndVerifyAsync(await ard.FetchEpisodeDetailAsync(full));
     }
 
+    // A DE egress proxy for local runs (#45). Set it to do the REAL geo-restricted download; leave it
+    // unset and the geo-restricted case just proves the fail-fast. e.g.
+    //   KRAUTWATCH_TEST_PROXY=http://<de-host>:3128 ./build.cmd TestLive
+    private static readonly string? TestProxy = Environment.GetEnvironmentVariable("KRAUTWATCH_TEST_PROXY");
+
     [Fact]
     public async Task Downloads_a_full_BieneMaja_episode_from_KiKA()
     {
         var ard = new ArdCatalogClient(Http);
         var show = await ard.FindShowAsync("Biene Maja", client: "kika");
         var full = (await ard.GetFullEpisodesAsync(show!)).First();
-        // KiKA episodes resolve to legacy ZDF Akamai assets that are geo-fenced to Germany — from
-        // outside DE the CDN 403s. Tolerate that (resolution + request path still exercised).
-        await DownloadAndVerifyAsync(await ard.FetchEpisodeDetailAsync(full), tolerateGeoBlock: true);
+        // Biene Maja is DACH geo-fenced. With a DE egress (KRAUTWATCH_TEST_PROXY) it downloads for real;
+        // without one, the provider fails fast (geo-restricted + no egress) — tolerated here.
+        await DownloadAndVerifyAsync(await ard.FetchEpisodeDetailAsync(full),
+            tolerateGeoBlock: string.IsNullOrWhiteSpace(TestProxy));
     }
 
     [Fact]
@@ -67,17 +73,18 @@ public class FullDownloadTests
 
         var job = new DownloadJob
         {
-            Id        = Guid.NewGuid(),
-            EpisodeId = "live-test",
-            Episode   = EpisodeFor(detail),
-            StreamUrl = detail.StreamUrl!,
-            Quality   = VideoQuality.High,
+            Id            = Guid.NewGuid(),
+            EpisodeId     = "live-test",
+            Episode       = EpisodeFor(detail),
+            StreamUrl     = detail.StreamUrl!,
+            Quality       = VideoQuality.High,
+            GeoRestricted = detail.GeoRestricted,
         };
 
         var directory = Path.Combine(Path.GetTempPath(), $"krautwatch-dl-{Guid.NewGuid():N}");
         try
         {
-            var provider = new RawMp4DownloadProvider(new FileNamingService(), NullLogger<RawMp4DownloadProvider>.Instance);
+            var provider = new RawMp4DownloadProvider(new FileNamingService(), new EnvEgress(), NullLogger<RawMp4DownloadProvider>.Instance);
 
             DownloadResult result;
             try
@@ -87,6 +94,10 @@ public class FullDownloadTests
             catch (HttpRequestException ex) when (tolerateGeoBlock && ex.StatusCode == HttpStatusCode.Forbidden)
             {
                 return; // CDN geo-block from this location — the download path itself is fine
+            }
+            catch (InvalidOperationException) when (tolerateGeoBlock)
+            {
+                return; // geo-restricted + no egress configured → fail-fast (expected without a test proxy)
             }
 
             File.Exists(result.OutputPath).ShouldBeTrue();
@@ -120,5 +131,14 @@ public class FullDownloadTests
         Span<byte> head = stackalloc byte[12];
         using var fs = File.OpenRead(path);
         return fs.Read(head) == 12 && Encoding.ASCII.GetString(head.Slice(4, 4)) == "ftyp";
+    }
+
+    // Egress that offers the optional KRAUTWATCH_TEST_PROXY (a DE proxy) for geo-restricted downloads.
+    private sealed class EnvEgress : IEgressProxyProvider
+    {
+        public Task<IReadOnlyList<string>> GetCandidatesAsync(CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<string>>(string.IsNullOrWhiteSpace(TestProxy) ? [] : [TestProxy!]);
+
+        public Task ReportResultAsync(string proxyUrl, bool ok, CancellationToken ct = default) => Task.CompletedTask;
     }
 }

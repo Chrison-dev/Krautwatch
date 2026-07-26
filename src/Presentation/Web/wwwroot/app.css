@@ -70,6 +70,8 @@ td.path { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-spa
 .status.active { color: #6aa6ff; border-color: #29456f; }
 .status.failed { color: #ff6b6b; border-color: #5f2f2f; }
 
+.geo { font-size: 11px; margin-left: 8px; padding: 1px 7px; border-radius: 999px; color: #d3a04b; border: 1px solid #5f4a2f; white-space: nowrap; }
+
 .bar { display: inline-block; width: 120px; height: 6px; background: var(--line); border-radius: 999px; overflow: hidden; vertical-align: middle; margin-right: 8px; }
 .fill { height: 100%; background: var(--active); }
 

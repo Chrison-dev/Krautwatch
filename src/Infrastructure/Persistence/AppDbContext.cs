@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<EpisodeStream> EpisodeStreams => Set<EpisodeStream>();
     public DbSet<DownloadJob> DownloadJobs => Set<DownloadJob>();
     public DbSet<AppSettings> Settings => Set<AppSettings>();
+    public DbSet<Proxy> Proxies => Set<Proxy>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -156,6 +157,32 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             // Phase-tracking columns
             e.Property(x => x.StreamType).HasMaxLength(10);
             e.Property(x => x.TempPath).HasMaxLength(1000);
+        });
+
+        // --------------------------------------------------------
+        // Proxy — cached public egress-proxy candidates (Mode B, #45)
+        // --------------------------------------------------------
+        modelBuilder.Entity<Proxy>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).ValueGeneratedNever().HasMaxLength(100); // "host:port"
+            e.Property(x => x.Host).IsRequired().HasMaxLength(100);
+            e.Property(x => x.Protocol).IsRequired().HasMaxLength(10);
+            e.Property(x => x.Source).IsRequired().HasMaxLength(50);
+            e.Property(x => x.Country).HasMaxLength(10);
+            e.Property(x => x.AnonymityLevel).HasMaxLength(20);
+            e.Property(x => x.VerifiedEgressCountry).HasMaxLength(10);
+
+            foreach (var ts in new[] { nameof(Proxy.SourceLastChecked), nameof(Proxy.LastProbedAt) })
+                e.Property<DateTimeOffset?>(ts).HasConversion(
+                    v => v.HasValue ? v.Value.ToString("O") : null,
+                    v => v != null ? DateTimeOffset.Parse(v) : (DateTimeOffset?)null);
+
+            foreach (var ts in new[] { nameof(Proxy.CreatedAt), nameof(Proxy.UpdatedAt) })
+                e.Property<DateTimeOffset>(ts).HasConversion(v => v.ToString("O"), v => DateTimeOffset.Parse(v));
+
+            e.Ignore(x => x.Url); // computed from Protocol/Host/Port
+            e.HasIndex(x => x.Country);
         });
 
         // --------------------------------------------------------

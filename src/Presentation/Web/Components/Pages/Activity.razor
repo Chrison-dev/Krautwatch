@@ -25,7 +25,13 @@ else
             @foreach (var j in _jobs)
             {
                 <tr>
-                    <td>@j.ShowTitle</td>
+                    <td>
+                        @j.ShowTitle
+                        @if (j.GeoRestricted)
+                        {
+                            <span class="geo" title="DACH geo-restricted — fetched via a German egress proxy (#45)">🌍 DACH</span>
+                        }
+                    </td>
                     <td>@j.EpisodeTitle</td>
                     <td><span class="status @StatusClass(j)">@j.Status</span></td>
                     <td>
