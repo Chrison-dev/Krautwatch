@@ -9,24 +9,24 @@ using Xunit;
 
 namespace Krautwatch.Infrastructure.Tests;
 
-public class EpisodeRepositoryTests : IDisposable
+[Collection(PostgresCollection.Name)]
+public class EpisodeRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
 {
-    private readonly AppDbContext _db;
-    private readonly EpisodeRepository _sut;
+    private AppDbContext _db = null!;
+    private EpisodeRepository _sut = null!;
 
-    public EpisodeRepositoryTests()
+    public async Task InitializeAsync()
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite("Data Source=:memory:")
-            .Options;
-
-        _db = new AppDbContext(options);
-        _db.Database.OpenConnection();
-        _db.Database.EnsureCreated();
-
+        _db = new AppDbContext(await postgres.CreateDatabaseAsync());
         _sut = new EpisodeRepository(_db);
 
         SeedTestData();
+    }
+
+    public Task DisposeAsync()
+    {
+        _db.Dispose();
+        return Task.CompletedTask;
     }
 
     private void SeedTestData()
@@ -219,9 +219,4 @@ public class EpisodeRepositoryTests : IDisposable
         all.ShouldHaveSingleItem().Title.ShouldBe("updated title");
     }
 
-    public void Dispose()
-    {
-        _db.Database.CloseConnection();
-        _db.Dispose();
-    }
 }

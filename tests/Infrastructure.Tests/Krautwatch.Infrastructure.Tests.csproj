@@ -11,7 +11,8 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Shouldly" />
     <PackageReference Include="NSubstitute" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <!-- Repository tests run against real Postgres (the production provider) in a container. -->
+    <PackageReference Include="Testcontainers.PostgreSql" />
   </ItemGroup>
 
 </Project>
