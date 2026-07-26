@@ -42,13 +42,14 @@ public class NzbTokenTests
 
 public class AddDownloadByTokenHandlerTests
 {
-    private static Episode EpisodeWithStream(string id) => new()
+    private static Episode EpisodeWithStream(string id, bool geoRestricted = false) => new()
     {
         Id = id,
         Title = "heute-show",
         ShowId = "zdf:heute-show",
         BroadcastDate = DateTimeOffset.UtcNow,
         Duration = TimeSpan.FromMinutes(30),
+        GeoRestricted = geoRestricted,
         Streams =
         [
             new EpisodeStream { Id = $"{id}:v", EpisodeId = id, Quality = VideoQuality.High, Url = "https://cdn/x.mp4", Format = "mp4" }
@@ -68,6 +69,20 @@ public class AddDownloadByTokenHandlerTests
         jobId.ShouldNotBeNull();
         await jobs.Received(1).AddAsync(Arg.Is<DownloadJob>(j => j.EpisodeId == "zdf:1" && j.StreamUrl == "https://cdn/x.mp4"), Arg.Any<CancellationToken>());
         await queue.Received(1).EnqueueAsync(jobId!.Value, "https://cdn/x.mp4", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Snapshots_the_episodes_geo_restriction_onto_the_job()
+    {
+        var episodes = Substitute.For<IEpisodeRepository>();
+        episodes.GetByIdAsync("kika:1", Arg.Any<CancellationToken>())
+            .Returns(EpisodeWithStream("kika:1", geoRestricted: true));
+        var jobs = Substitute.For<IDownloadJobRepository>();
+        var queue = Substitute.For<IDownloadQueue>();
+
+        await new AddDownloadByTokenHandler(episodes, jobs, queue).HandleAsync("kika:1");
+
+        await jobs.Received(1).AddAsync(Arg.Is<DownloadJob>(j => j.GeoRestricted), Arg.Any<CancellationToken>());
     }
 
     [Fact]

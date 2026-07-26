@@ -14,6 +14,13 @@ public class Episode
     public DateTimeOffset? AvailableUntil { get; init; }
     public ContentType ContentType { get; init; } = ContentType.Episode;
 
+    /// <summary>
+    /// The broadcaster declares this asset geo-restricted (e.g. DACH-only licensed content). The
+    /// stream is only reachable from an in-region egress; the Downloader routes such jobs through a
+    /// configured proxy (#45). Detected at resolve time — ARD <c>isGeoBlocked</c> / ZDF <c>geoLocation</c>.
+    /// </summary>
+    public bool GeoRestricted { get; init; }
+
     // Sonarr numbering model — populated when the broadcaster exposes it; null for pure Daily
     // (air-date-matched) content. BroadcastDate is the air-date key for the Daily regime.
     public int? SeasonNumber { get; init; }

@@ -38,6 +38,7 @@ public class FullEpisodeFetchTests
         detail.StreamUrl.ShouldNotBeNull();
         detail.StreamUrl!.ShouldStartWith("https://");
         detail.SubtitleUrl.ShouldNotBeNull(); // ARD exposes a webvtt subtitle
+        detail.GeoRestricted.ShouldBeFalse(); // in-house satire — available worldwide (#45)
     }
 
     [Fact]
@@ -58,6 +59,7 @@ public class FullEpisodeFetchTests
         detail.Duration.ShouldBeGreaterThan(TimeSpan.FromMinutes(5)); // a full ~12 min cartoon episode
         detail.StreamUrl.ShouldNotBeNull();
         detail.StreamUrl!.ShouldStartWith("https://");
+        detail.GeoRestricted.ShouldBeTrue(); // licensed cartoon, DACH-only (isGeoBlocked) (#45)
     }
 
     [Fact]
@@ -78,5 +80,6 @@ public class FullEpisodeFetchTests
         detail.Synopsis.ShouldNotBeNullOrWhiteSpace();
         detail.StreamUrl.ShouldNotBeNull();
         detail.StreamUrl!.ShouldStartWith("https://");
+        detail.GeoRestricted.ShouldBeFalse(); // PTMD geoLocation "none" — worldwide (#45)
     }
 }

@@ -51,6 +51,7 @@ internal static class EpisodeMapper
             ContentType = ContentType.Episode,
             SeasonNumber = season,
             EpisodeNumber = number,
+            GeoRestricted = detail.GeoRestricted,
         };
 
         if (!string.IsNullOrWhiteSpace(detail.StreamUrl))

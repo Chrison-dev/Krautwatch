@@ -115,16 +115,19 @@ public sealed class ArdCatalogClient(HttpClient http)
             ? DateTimeOffset.Parse(b.GetString()!) : episode.BroadcastedOn;
         var synopsis = w.TryGetProperty("synopsis", out var sy) && sy.ValueKind == JsonValueKind.String ? sy.GetString() : null;
 
-        var (streamUrl, subtitleUrl) = ParseMedia(w);
+        var (streamUrl, subtitleUrl, geoBlocked) = ParseMedia(w);
 
-        return new EpisodeDetail(title, episode.ShowTitle, broadcaster, airDate, episode.Duration, synopsis, streamUrl, subtitleUrl);
+        return new EpisodeDetail(title, episode.ShowTitle, broadcaster, airDate, episode.Duration, synopsis, streamUrl, subtitleUrl, geoBlocked);
     }
 
     // mcV6: mediaCollection.embedded.streams[].media[] (video/mp4 by resolution) + subtitles[].sources[] (webvtt).
-    private static (string? Stream, string? Subtitle) ParseMedia(JsonElement widget)
+    // isGeoBlocked (on the embedded mediaCollection) flags DACH-only assets (#45).
+    private static (string? Stream, string? Subtitle, bool GeoBlocked) ParseMedia(JsonElement widget)
     {
         if (!widget.TryGetProperty("mediaCollection", out var mcOuter) ||
-            !mcOuter.TryGetProperty("embedded", out var mc)) return (null, null);
+            !mcOuter.TryGetProperty("embedded", out var mc)) return (null, null, false);
+
+        var geoBlocked = mc.TryGetProperty("isGeoBlocked", out var gb) && gb.ValueKind == JsonValueKind.True;
 
         string? bestMp4 = null; var bestRes = -1;
         if (mc.TryGetProperty("streams", out var streams))
@@ -145,7 +148,7 @@ public sealed class ArdCatalogClient(HttpClient http)
                 if (src.TryGetProperty("kind", out var k) && k.GetString() == "webvtt" &&
                     src.TryGetProperty("url", out var su)) { subtitle = su.GetString(); break; }
 
-        return (bestMp4, subtitle);
+        return (bestMp4, subtitle, geoBlocked);
     }
 
     private static ArdEpisode? ToEpisode(JsonElement teaser, string showTitle)
