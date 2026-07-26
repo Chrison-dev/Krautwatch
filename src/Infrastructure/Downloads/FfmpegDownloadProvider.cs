@@ -14,7 +14,8 @@ namespace Krautwatch.Infrastructure.Downloads;
 /// Requires <c>ffmpeg</c> on PATH (the Downloader image bundles it); override with
 /// <c>KRAUTWATCH_FFMPEG</c>.
 /// </summary>
-public sealed class FfmpegDownloadProvider(FileNamingService naming, ILogger<FfmpegDownloadProvider> logger)
+public sealed class FfmpegDownloadProvider(
+    FileNamingService naming, IEgressProxyProvider egress, ILogger<FfmpegDownloadProvider> logger)
     : IDownloadProvider
 {
     private const string UserAgent = "Krautwatch/1.0 (+https://github.com/Chrison-dev/Krautwatch)";
@@ -25,6 +26,10 @@ public sealed class FfmpegDownloadProvider(FileNamingService naming, ILogger<Ffm
     {
         var episode = job.Episode
             ?? throw new InvalidOperationException($"Job {job.Id} has no episode metadata to name the file.");
+
+        // Geo-restricted (#45): remux through a German egress. ffmpeg has no fall-through, so we take
+        // the best candidate and let it drive its own (proxied) segment fetches; no proxy → fail fast.
+        var proxy = await ResolveProxyAsync(job, ct);
 
         var finalPath = naming.BuildFinalPath(outputDirectory, episode, job.Quality);
         var tempPath = Path.ChangeExtension(naming.BuildTempPath(outputDirectory, job.Id, job.Quality), ".mp4");
@@ -41,6 +46,11 @@ public sealed class FfmpegDownloadProvider(FileNamingService naming, ILogger<Ffm
         {
             "-hide_banner", "-nostdin", "-y",
             "-user_agent", UserAgent,
+        })
+            startInfo.ArgumentList.Add(arg);
+        if (proxy is not null) { startInfo.ArgumentList.Add("-http_proxy"); startInfo.ArgumentList.Add(proxy); }
+        foreach (var arg in new[]
+        {
             "-i", job.StreamUrl,
             "-c", "copy",                 // remux only — no transcode
             "-bsf:a", "aac_adtstoasc",    // TS/ADTS AAC → MP4-safe AAC
@@ -98,13 +108,31 @@ public sealed class FfmpegDownloadProvider(FileNamingService naming, ILogger<Ffm
         if (process.ExitCode != 0)
         {
             TryDelete(tempPath);
+            if (proxy is not null) await egress.ReportResultAsync(proxy, ok: false, ct);
             throw new InvalidOperationException($"ffmpeg exited {process.ExitCode}: {Tail(stderrTail.ToString())}");
         }
 
+        if (proxy is not null) await egress.ReportResultAsync(proxy, ok: true, ct);
         File.Move(tempPath, finalPath, overwrite: true);
         var size = new FileInfo(finalPath).Length;
-        logger.LogInformation("Remuxed {Episode} ({Size} bytes)", episode.Title, size);
+        logger.LogInformation("Remuxed {Episode} ({Size} bytes) via {Egress}",
+            episode.Title, size, proxy ?? "direct");
         return new DownloadResult(finalPath, size);
+    }
+
+    // The best egress proxy for a geo-restricted job, or null to fetch directly. Fails fast when a job
+    // is geo-restricted but no egress is configured.
+    private async Task<string?> ResolveProxyAsync(DownloadJob job, CancellationToken ct)
+    {
+        if (!job.GeoRestricted) return null;
+
+        var candidates = await egress.GetCandidatesAsync(ct);
+        if (candidates.Count == 0)
+            throw new InvalidOperationException(
+                "Stream is geo-restricted (DACH-only) and no egress proxy is configured. " +
+                "Set Download:ProxyUrl, or enable Download:ProxyList, to route it through a German egress (#45).");
+
+        return candidates[0];
     }
 
     private static void TryDelete(string path)

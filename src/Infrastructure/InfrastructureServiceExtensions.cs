@@ -1,4 +1,5 @@
 using Krautwatch.Domain.Interfaces;
+using Krautwatch.Domain.Options;
 using Krautwatch.Infrastructure.Catalog;
 using Krautwatch.Infrastructure.Catalog.MediathekView;
 using Krautwatch.Infrastructure.Crawling.Ard;
@@ -7,6 +8,7 @@ using Krautwatch.Infrastructure.Downloads;
 using Krautwatch.Infrastructure.Jobs;
 using Krautwatch.Infrastructure.Messaging;
 using Krautwatch.Infrastructure.Persistence;
+using Krautwatch.Infrastructure.Proxies;
 using Krautwatch.Infrastructure.Settings;
 using Krautwatch.Infrastructure.System;
 using Microsoft.Extensions.Configuration;
@@ -54,6 +56,7 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IEpisodeRepository, EpisodeRepository>();
         services.AddScoped<IDownloadJobRepository, DownloadJobRepository>();
         services.AddScoped<ISettingsRepository, SettingsRepository>();
+        services.AddScoped<IProxyRepository, ProxyRepository>();
 
         return services;
     }
@@ -147,6 +150,28 @@ public static class InfrastructureServiceExtensions
         services.AddSingleton<RawMp4DownloadProvider>();
         services.AddSingleton<FfmpegDownloadProvider>();
         services.AddSingleton<IDownloadProvider, DownloadDispatcher>();
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the egress-proxy selector for geo-restricted downloads (#45). Requires an
+    /// <see cref="EgressProxyOptions"/> to be registered by the host. Singleton (it opens its own scope
+    /// to reach the scoped proxy repository), so it can be injected into the singleton download engines.
+    /// </summary>
+    public static IServiceCollection AddEgressProxy(this IServiceCollection services)
+    {
+        services.AddSingleton<IEgressProxyProvider, EgressProxyProvider>();
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the public proxy-list source (Mode B, #45): the typed GeoNode HTTP client behind the
+    /// <see cref="IProxyListSource"/> port. Requires a <see cref="ProxyListOptions"/> to be registered.
+    /// The refresh scheduler + Action are wired by the host (they are Application types).
+    /// </summary>
+    public static IServiceCollection AddProxyListSource(this IServiceCollection services)
+    {
+        services.AddHttpClient<IProxyListSource, GeoNodeProxyListSource>();
         return services;
     }
 

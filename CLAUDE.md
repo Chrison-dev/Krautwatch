@@ -124,6 +124,24 @@ dotnet ef migrations add <Name> --project src/Infrastructure --context AppDbCont
 
 System dependency: **ffmpeg** on PATH (the Downloader agent's image bundles it).
 
+### Geo-restricted downloads → egress proxy (#45)
+
+Some assets (KiKA / licensed content) are **DACH geo-restricted** — detected at crawl time (ARD
+`isGeoBlocked` / ZDF `geoLocation`) and flagged on the `Episode`/`DownloadJob`. The Downloader routes
+only those jobs through a German egress proxy; unrestricted downloads go direct. Config (Downloader host):
+
+```
+Download:ProxyUrl                     # bring-your-own proxy (recommended: your own DE VPS/WireGuard exit)
+Download:ProxyList:Enabled            # opt-in: auto-source free DE proxies from a public list (best-effort)
+Download:ProxyList:RefreshInterval    # default 1.00:00:00 (daily) — refreshes the cached `Proxy` table
+Download:ProxyList:SourceUrl          # GeoNode DE endpoint by default
+Download:ProxyList:Country            # DE
+Download:ProxyList:MaxCandidates      # ranked candidates offered per geo-restricted download
+```
+
+A geo-restricted job with no egress configured fails fast. Live test: set `KRAUTWATCH_TEST_PROXY` to a
+DE proxy and `./build.cmd TestLive` does the real KiKA download (else it just proves the fail-fast).
+
 ## Tech stack
 
 - **.NET 10** (DR-007), C# 14. ASP.NET Core Minimal APIs.

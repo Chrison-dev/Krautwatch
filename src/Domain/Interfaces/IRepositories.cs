@@ -52,3 +52,22 @@ public interface ISettingsRepository
     Task<AppSettings> GetAsync(CancellationToken ct = default);
     Task SaveAsync(AppSettings settings, CancellationToken ct = default);
 }
+
+/// <summary>Cached public egress-proxy candidates for Mode B (#45).</summary>
+public interface IProxyRepository
+{
+    /// <summary>Upserts a refreshed batch by <c>Id</c> (host:port), preserving our feedback columns.</summary>
+    Task UpsertBatchAsync(IEnumerable<Proxy> proxies, CancellationToken ct = default);
+
+    /// <summary>Ranked best-first candidates for a country: probed-OK first, then by uptime/speed/recency.</summary>
+    Task<IReadOnlyList<Proxy>> GetRankedAsync(string country, int limit, CancellationToken ct = default);
+
+    /// <summary>Records the outcome of a real fetch through a proxy (by URL) for future ranking.</summary>
+    Task RecordProbeResultAsync(string proxyUrl, bool ok, CancellationToken ct = default);
+}
+
+/// <summary>Fetches egress-proxy candidates from an external public list (e.g. GeoNode).</summary>
+public interface IProxyListSource
+{
+    Task<IReadOnlyList<Proxy>> FetchAsync(CancellationToken ct = default);
+}
