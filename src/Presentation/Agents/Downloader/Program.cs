@@ -1,10 +1,9 @@
+using Krautwatch.Agents.Downloader;
 using Krautwatch.Application;
 using Krautwatch.Infrastructure;
-using Wolverine;
-using Wolverine.Postgresql;
 
-// Krautwatch Downloader agent (DR-009). A microservice host wired to Postgres + durable Wolverine;
-// the behaviour is filled in by the Application/Crawling slices in a later increment.
+// Krautwatch Downloader agent (DR-009). Polls the durable job table for Queued downloads and pulls
+// each stream to disk (raw progressive MP4) via the Application download Action.
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
@@ -19,15 +18,8 @@ builder.Services.AddInfrastructure(new DbProviderOptions
     ConnectionString = connectionString,
 });
 builder.Services.AddApplication();
-
-// Durable Wolverine (Postgres transport) — the shared message store with the API + other agents.
-builder.UseWolverine(opts =>
-{
-    opts.PersistMessagesWithPostgresql(connectionString);
-    opts.Policies.UseDurableLocalQueues();
-});
-
-// TODO (#3): consume StartDownloadCommand and run the ffmpeg download (salvage from git history).
+builder.Services.AddDownloadProvider();                 // the raw-MP4 download engine
+builder.Services.AddHostedService<DownloadWorker>();    // claims + runs Queued jobs
 
 var app = builder.Build();
 

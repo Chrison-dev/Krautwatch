@@ -132,6 +132,15 @@ public static class InfrastructureServiceExtensions
     }
 
     /// <summary>
+    /// Registers the download engine (raw progressive-MP4 puller) for the Downloader agent.
+    /// </summary>
+    public static IServiceCollection AddDownloadProvider(this IServiceCollection services)
+    {
+        services.AddSingleton<IDownloadProvider, RawMp4DownloadProvider>();
+        return services;
+    }
+
+    /// <summary>
     /// Runs EF Core migrations. Call only from roles that own the DB (core + standalone).
     /// </summary>
     public static async Task MigrateDatabaseAsync(this IHost host)

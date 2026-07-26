@@ -6,9 +6,6 @@
     <ProjectReference Include="..\..\ServiceDefaults\Krautwatch.ServiceDefaults.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="WolverineFx" />
-    <PackageReference Include="WolverineFx.Postgresql" />
-  </ItemGroup>
+  <!-- Polls the durable job table directly (no messaging bus needed). -->
 
 </Project>
