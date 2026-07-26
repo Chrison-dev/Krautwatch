@@ -16,8 +16,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > **⚠️ Architecture reset in progress (DR-009).** The solution has been renamed
 > **MediathekNext → Krautwatch** and reshaped into the layers below (Presentation fleet in place;
 > `CoreWorker`/`Worker` role hosts dropped). Postgres + durable Wolverine (Postgres transport) are wired and the API runs EF migrations at
-> startup. Still to come: broadcaster logic ported into `Application/*` slices, and the
-> crawler/downloader **agents** (fleet). The superseded `docker/` topology (DR-004) is dead and will be replaced by Aspire-generated
+> startup. The agent fleet (Ard/Zdf/Downloader) is scaffolded on Aspire
+> and wired to Postgres + Wolverine. Still to come: the broadcaster crawl/download logic
+> ported into the `Application/*` slices. The superseded `docker/` topology (DR-004) is dead and will be replaced by Aspire-generated
 > compose in the distribution milestone.
 
 ## Architecture (DR-009 — read `docs/architecture/DR-009` before structural changes)

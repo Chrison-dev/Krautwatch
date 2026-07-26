@@ -1,13 +1,13 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
 // ──────────────────────────────────────────────────────────────
-// Postgres (DR-009) — Aspire provisions the container + database, and injects the
-// connection string into the referencing services as ConnectionStrings:krautwatch.
+// Postgres (DR-009) — Aspire provisions the container + database and injects the
+// connection string into referencing services as ConnectionStrings:krautwatch.
 // ──────────────────────────────────────────────────────────────
 var postgres = builder.AddPostgres("postgres");
 var db = postgres.AddDatabase("krautwatch");
 
-// The *arr-facing API surface (Newznab + SABnzbd + RSS).
+// The *arr-facing API surface (Newznab + SABnzbd + RSS). Owns EF migrations.
 var api = builder.AddProject<Projects.Krautwatch_Api>("api")
     .WithReference(db)
     .WaitFor(db)
@@ -20,8 +20,22 @@ builder.AddProject<Projects.Krautwatch_Web>("web")
     .WaitFor(api)
     .WithExternalHttpEndpoints();
 
-// TODO (5b): add the crawler agents (Ard/Zdf) + Downloader agent here, each with
-// .WithReference(db) and the message transport.
+// ──────────────────────────────────────────────────────────────
+// Agents (DR-009) — per-broadcaster crawlers + the downloader, each an independently
+// deployable microservice sharing Postgres + the durable Wolverine message store.
+// Behaviour is filled in by the Application/Crawling slices in a later increment.
+// ──────────────────────────────────────────────────────────────
+builder.AddProject<Projects.Krautwatch_Agents_Ard>("agent-ard")
+    .WithReference(db).WaitFor(db)
+    .WithHttpHealthCheck("/health");
+
+builder.AddProject<Projects.Krautwatch_Agents_Zdf>("agent-zdf")
+    .WithReference(db).WaitFor(db)
+    .WithHttpHealthCheck("/health");
+
+builder.AddProject<Projects.Krautwatch_Agents_Downloader>("agent-downloader")
+    .WithReference(db).WaitFor(db)
+    .WithHttpHealthCheck("/health");
 
 // ──────────────────────────────────────────────────────────────
 // Observability (opt-in via launch profile "observability")
