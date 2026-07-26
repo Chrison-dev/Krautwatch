@@ -38,29 +38,42 @@ public sealed class RawMp4DownloadProvider(FileNamingService naming, ILogger<Raw
 
         logger.LogInformation("Downloading {Episode} → {Path}", episode.Title, finalPath);
 
-        using (var response = await Http.GetAsync(job.StreamUrl, HttpCompletionOption.ResponseHeadersRead, ct))
+        try
         {
-            response.EnsureSuccessStatusCode();
-            var contentLength = response.Content.Headers.ContentLength;
-
-            await using var source = await response.Content.ReadAsStreamAsync(ct);
-            await using var file = File.Create(tempPath);
-
-            var buffer = new byte[81920];
-            long total = 0;
-            int read;
-            while ((read = await source.ReadAsync(buffer, ct)) > 0)
+            using (var response = await Http.GetAsync(job.StreamUrl, HttpCompletionOption.ResponseHeadersRead, ct))
             {
-                await file.WriteAsync(buffer.AsMemory(0, read), ct);
-                total += read;
-                if (contentLength is > 0)
-                    progress.Report(Math.Clamp(total * 100.0 / contentLength.Value, 0, 100));
+                response.EnsureSuccessStatusCode();
+                var contentLength = response.Content.Headers.ContentLength;
+
+                await using var source = await response.Content.ReadAsStreamAsync(ct);
+                await using var file = File.Create(tempPath);
+
+                var buffer = new byte[81920];
+                long total = 0;
+                int read;
+                while ((read = await source.ReadAsync(buffer, ct)) > 0)
+                {
+                    await file.WriteAsync(buffer.AsMemory(0, read), ct);
+                    total += read;
+                    if (contentLength is > 0)
+                        progress.Report(Math.Clamp(total * 100.0 / contentLength.Value, 0, 100));
+                }
             }
+        }
+        catch
+        {
+            TryDelete(tempPath); // don't leave a half-written .part on failure/cancel
+            throw;
         }
 
         File.Move(tempPath, finalPath, overwrite: true);
         var size = new FileInfo(finalPath).Length;
         logger.LogInformation("Downloaded {Episode} ({Size} bytes)", episode.Title, size);
         return new DownloadResult(finalPath, size);
+    }
+
+    private static void TryDelete(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); } catch { /* best effort */ }
     }
 }

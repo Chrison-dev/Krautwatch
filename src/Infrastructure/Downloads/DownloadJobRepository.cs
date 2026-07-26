@@ -88,4 +88,13 @@ public class DownloadJobRepository(AppDbContext db) : IDownloadJobRepository
 
     public async Task DeleteAsync(Guid id, CancellationToken ct = default) =>
         await db.DownloadJobs.Where(j => j.Id == id).ExecuteDeleteAsync(ct);
+
+    public async Task UpdateProgressAsync(Guid id, double percent, CancellationToken ct = default) =>
+        await db.DownloadJobs.Where(j => j.Id == id)
+            .ExecuteUpdateAsync(s => s.SetProperty(j => j.ProgressPercent, (double?)percent), ct);
+
+    public async Task<DownloadStatus?> GetStatusAsync(Guid id, CancellationToken ct = default) =>
+        await db.DownloadJobs.Where(j => j.Id == id)
+            .Select(j => (DownloadStatus?)j.Status)
+            .FirstOrDefaultAsync(ct);
 }
