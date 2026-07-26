@@ -7,23 +7,17 @@ var builder = DistributedApplication.CreateBuilder(args);
 var postgres = builder.AddPostgres("postgres");
 var db = postgres.AddDatabase("krautwatch");
 
-// The *arr-facing API surface (Newznab + SABnzbd + RSS). Owns EF migrations.
-var api = builder.AddProject<Projects.Krautwatch_Api>("api")
+// Migrator (DR-009) — a run-to-completion resource that owns the EF schema. Every DB consumer
+// WaitForCompletion(migrator), so migration ownership no longer lives inside an app host.
+var migrator = builder.AddProject<Projects.Krautwatch_Migrator>("migrator")
     .WithReference(db)
-    .WaitFor(db)
-    .WithHttpHealthCheck("/health")
-    .WithExternalHttpEndpoints();
+    .WaitFor(db);
 
-// Blazor instance-config UI — talks to the API.
-builder.AddProject<Projects.Krautwatch_Web>("web")
-    .WithReference(api)
-    .WaitFor(api)
-    .WithExternalHttpEndpoints();
-
-// Newznab indexer — the public *arr-facing surface (Newznab caps/search/RSS). Read-only.
+// Newznab + SABnzbd — the public *arr-facing surface (indexer + download client).
 builder.AddProject<Projects.Krautwatch_Api_NewznabIndexerApi>("newznab")
     .WithReference(db)
     .WaitFor(db)
+    .WaitForCompletion(migrator)
     .WithHttpHealthCheck("/health")
     .WithExternalHttpEndpoints();
 
@@ -33,15 +27,15 @@ builder.AddProject<Projects.Krautwatch_Api_NewznabIndexerApi>("newznab")
 // Behaviour is filled in by the Application/Crawling slices in a later increment.
 // ──────────────────────────────────────────────────────────────
 builder.AddProject<Projects.Krautwatch_Agents_Ard>("agent-ard")
-    .WithReference(db).WaitFor(db)
+    .WithReference(db).WaitFor(db).WaitForCompletion(migrator)
     .WithHttpHealthCheck("/health");
 
 builder.AddProject<Projects.Krautwatch_Agents_Zdf>("agent-zdf")
-    .WithReference(db).WaitFor(db)
+    .WithReference(db).WaitFor(db).WaitForCompletion(migrator)
     .WithHttpHealthCheck("/health");
 
 builder.AddProject<Projects.Krautwatch_Agents_Downloader>("agent-downloader")
-    .WithReference(db).WaitFor(db)
+    .WithReference(db).WaitFor(db).WaitForCompletion(migrator)
     .WithHttpHealthCheck("/health");
 
 // ──────────────────────────────────────────────────────────────
