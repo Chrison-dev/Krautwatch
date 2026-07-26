@@ -31,4 +31,5 @@ public record DownloadJobResponse(
     long? FileSizeBytes,
     DateTimeOffset CreatedAt,
     DateTimeOffset? StartedAt,
-    DateTimeOffset? CompletedAt);
+    DateTimeOffset? CompletedAt,
+    bool Active);           // true while pre-terminal — splits the SABnzbd queue from history
