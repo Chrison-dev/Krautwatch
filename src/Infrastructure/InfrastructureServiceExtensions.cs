@@ -132,11 +132,14 @@ public static class InfrastructureServiceExtensions
     }
 
     /// <summary>
-    /// Registers the download engine (raw progressive-MP4 puller) for the Downloader agent.
+    /// Registers the download engines for the Downloader agent: a raw progressive-MP4 puller and an
+    /// ffmpeg HLS remuxer, behind a dispatcher that routes each job by its stream type.
     /// </summary>
     public static IServiceCollection AddDownloadProvider(this IServiceCollection services)
     {
-        services.AddSingleton<IDownloadProvider, RawMp4DownloadProvider>();
+        services.AddSingleton<RawMp4DownloadProvider>();
+        services.AddSingleton<FfmpegDownloadProvider>();
+        services.AddSingleton<IDownloadProvider, DownloadDispatcher>();
         return services;
     }
 
