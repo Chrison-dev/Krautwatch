@@ -15,6 +15,7 @@ var migrator = builder.AddProject<Projects.Krautwatch_Migrator>("migrator")
 
 // Newznab + SABnzbd — the public *arr-facing surface (indexer + download client).
 builder.AddProject<Projects.Krautwatch_Api_NewznabIndexerApi>("newznab")
+    .WithHttpEndpoint()
     .WithReference(db)
     .WaitFor(db)
     .WaitForCompletion(migrator)
@@ -23,6 +24,7 @@ builder.AddProject<Projects.Krautwatch_Api_NewznabIndexerApi>("newznab")
 
 // Standalone UI — search / download / monitor without a Sonarr/Radarr instance (Blazor Server).
 builder.AddProject<Projects.Krautwatch_Web>("web")
+    .WithHttpEndpoint()
     .WithReference(db)
     .WaitFor(db)
     .WaitForCompletion(migrator)
@@ -34,14 +36,17 @@ builder.AddProject<Projects.Krautwatch_Web>("web")
 // Behaviour is filled in by the Application/Crawling slices in a later increment.
 // ──────────────────────────────────────────────────────────────
 builder.AddProject<Projects.Krautwatch_Agents_Ard>("agent-ard")
+    .WithHttpEndpoint()
     .WithReference(db).WaitFor(db).WaitForCompletion(migrator)
     .WithHttpHealthCheck("/health");
 
 builder.AddProject<Projects.Krautwatch_Agents_Zdf>("agent-zdf")
+    .WithHttpEndpoint()
     .WithReference(db).WaitFor(db).WaitForCompletion(migrator)
     .WithHttpHealthCheck("/health");
 
 builder.AddProject<Projects.Krautwatch_Agents_Downloader>("agent-downloader")
+    .WithHttpEndpoint()
     .WithReference(db).WaitFor(db).WaitForCompletion(migrator)
     .WithHttpHealthCheck("/health");
 
