@@ -1,4 +1,5 @@
 using Krautwatch.Domain.Entities;
+using Krautwatch.Domain.Enums;
 using Krautwatch.Domain.Interfaces;
 using Microsoft.Extensions.Logging;
 
@@ -35,22 +36,35 @@ public class RunDownloadHandler(
         var latest = 0.0;
         var progress = new Progress<double>(p => latest = p);
 
+        // Cancel is cross-process: the UI marks the job Cancelled in the DB; we poll for it and abort.
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var cancelled = false;
+
         try
         {
-            var download = provider.DownloadAsync(job, directory, progress, ct);
+            var download = provider.DownloadAsync(job, directory, progress, cts.Token);
             while (!download.IsCompleted)
             {
                 var finished = await Task.WhenAny(download, Task.Delay(ProgressInterval, ct));
-                if (finished != download)
+                if (finished == download) break;
+
+                await jobs.UpdateProgressAsync(job.Id, latest, ct);
+                if (await jobs.GetStatusAsync(job.Id, ct) == DownloadStatus.Cancelled)
                 {
-                    job.UpdateProgress(latest);
-                    await jobs.UpdateAsync(job, ct);
+                    cancelled = true;
+                    await cts.CancelAsync();
                 }
             }
 
             var result = await download;
             job.MarkCompleted(result.OutputPath, result.SizeBytes);
+            await jobs.UpdateAsync(job, ct);
             logger.LogInformation("Download {JobId} completed: {Path}", job.Id, result.OutputPath);
+        }
+        catch (OperationCanceledException) when (cancelled)
+        {
+            // The UI already set Status=Cancelled and the provider cleaned up its partial file — leave it.
+            logger.LogInformation("Download {JobId} cancelled.", job.Id);
         }
         catch (OperationCanceledException)
         {
@@ -59,9 +73,8 @@ public class RunDownloadHandler(
         catch (Exception ex)
         {
             job.MarkDownloadFailed(ex.Message);
+            await jobs.UpdateAsync(job, ct);
             logger.LogError(ex, "Download {JobId} failed", job.Id);
         }
-
-        await jobs.UpdateAsync(job, ct);
     }
 }

@@ -26,6 +26,11 @@ public interface IDownloadJobRepository
     Task AddAsync(DownloadJob job, CancellationToken ct = default);
     Task UpdateAsync(DownloadJob job, CancellationToken ct = default);
     Task DeleteAsync(Guid id, CancellationToken ct = default);
+
+    // Progress-only write (doesn't touch Status) so an out-of-band cancel isn't clobbered mid-download.
+    Task UpdateProgressAsync(Guid id, double percent, CancellationToken ct = default);
+    // Lightweight status read — the Downloader polls this to notice a cancel requested by the UI.
+    Task<DownloadStatus?> GetStatusAsync(Guid id, CancellationToken ct = default);
 }
 
 public interface IEpisodeRepository

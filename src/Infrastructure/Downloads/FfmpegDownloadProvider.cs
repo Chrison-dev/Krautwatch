@@ -75,17 +75,25 @@ public sealed class FfmpegDownloadProvider(FileNamingService naming, ILogger<Ffm
 
         process.BeginErrorReadLine();
 
-        var totalSeconds = episode.Duration.TotalSeconds;
-        string? line;
-        while ((line = await process.StandardOutput.ReadLineAsync(ct)) is not null)
+        try
         {
-            if (totalSeconds > 0
-                && line.StartsWith("out_time_us=", StringComparison.Ordinal)
-                && long.TryParse(line.AsSpan("out_time_us=".Length), out var us) && us > 0)
-                progress.Report(Math.Clamp(us / 1_000_000.0 / totalSeconds * 100, 0, 100));
-        }
+            var totalSeconds = episode.Duration.TotalSeconds;
+            string? line;
+            while ((line = await process.StandardOutput.ReadLineAsync(ct)) is not null)
+            {
+                if (totalSeconds > 0
+                    && line.StartsWith("out_time_us=", StringComparison.Ordinal)
+                    && long.TryParse(line.AsSpan("out_time_us=".Length), out var us) && us > 0)
+                    progress.Report(Math.Clamp(us / 1_000_000.0 / totalSeconds * 100, 0, 100));
+            }
 
-        await process.WaitForExitAsync(ct);
+            await process.WaitForExitAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            TryDelete(tempPath); // ffmpeg was killed (cancel/shutdown) — drop the partial remux
+            throw;
+        }
 
         if (process.ExitCode != 0)
         {

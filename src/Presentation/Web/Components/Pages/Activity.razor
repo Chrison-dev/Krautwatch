@@ -46,6 +46,12 @@ else
                     </td>
                     <td class="path muted small">@(j.OutputPath ?? j.ErrorMessage ?? "")</td>
                     <td class="right actions">
+                        @if (j.Active)
+                        {
+                            <button class="icon-btn danger" title="Cancel download" @onclick="() => CancelAsync(j.JobId)">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                            </button>
+                        }
                         @if (!j.Active && j.Status != "Completed")
                         {
                             <button class="icon-btn" title="Retry download" @onclick="() => RetryAsync(j.JobId)">
@@ -109,6 +115,15 @@ else
     {
         using var scope = Scopes.CreateScope();
         await scope.ServiceProvider.GetRequiredService<DeleteDownloadHandler>().HandleAsync(jobId);
+        await RefreshAsync();
+    }
+
+    // Mark the job Cancelled — a Queued job is then never claimed; a Downloading one is aborted by
+    // the Downloader when it next polls (within a few seconds).
+    async Task CancelAsync(Guid jobId)
+    {
+        using var scope = Scopes.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<CancelDownloadHandler>().HandleAsync(jobId);
         await RefreshAsync();
     }
 
