@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <Sdk Name="Aspire.AppHost.Sdk" Version="13.1.2" />
+  <!-- Keep in lockstep with the Aspire.Hosting* PackageVersions in Directory.Packages.props: this SDK
+       pins Aspire.Hosting.AppHost + the DCP orchestrator + dashboard, and DCP refuses to start if it
+       is older than Aspire.Hosting. -->
+  <Sdk Name="Aspire.AppHost.Sdk" Version="13.4.6" />
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
