@@ -24,6 +24,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > pulls each stream to disk, routing by type: a raw byte copy for progressive MP4, or an ffmpeg remux
 > (`-c copy`) for HLS. The superseded `docker/` topology (DR-004) is dead and will be replaced by
 > Aspire-generated compose in the distribution milestone.
+>
+> **Known gaps (don't assume these exist):**
+> - **The crawl work-list is hardcoded**, not Sonarr-driven. `CrawlOptions.Targets` binds from each
+>   agent's `Crawl` config section and falls back to seed shows in `Agents/{Ard,Zdf}/Program.cs`
+>   (`extra 3` / `Die Biene Maja` / `heute-show`). DR-010's reach-back — poll each Sonarr/Radarr
+>   instance for its `monitored` series — is **not implemented**, and neither is any
+>   Sonarr/Radarr-instance entity or config UI. `Settings` is download settings only.
+> - `AppSettings.CatalogProviderKey` still defaults to `"mediathekview"`, and
+>   `Infrastructure/Catalog/MediathekView` survives from the DR-001 era — de-emphasised by DR-010.
+> - Auth is a single optional API key (see below); no user/identity model.
+> - `README.md` is **pre-DR-009 and wholly wrong** (describes the dropped role system, SQLite,
+>   `Krautwatch.Worker`, the retired `/api/catalog` surface) — issue #25.
 
 ## Architecture (DR-009 — read `docs/architecture/DR-009` before structural changes)
 
@@ -53,27 +65,49 @@ independently testable, and promotable to its own project later. CQRS/A lives *i
 
 ```
 Application/
-├── Crawling/   Action/ (ArdCrawling.cs, ZdfCrawling.cs) · Command/ · Query/
-├── Downloads/  Action/ · Command/ · Query/
-├── Indexing/   Query/ …   (Newznab search + RSS read side)
-├── Settings/   Command/ · Query/   (Sonarr/Radarr instances)
-└── Abstractions/  (ports the adapters implement)
+├── Catalog/    BrowseCatalog · SearchCatalog · GetEpisodeDetail   (read side for the standalone Web UI)
+├── Crawling/   CrawlShow (Action) · CrawlScheduler (BackgroundService, config-driven targets)
+├── Downloads/  RunDownload · AddDownloadByToken (Actions) · DownloadHandlers · RefreshProxyList · NzbToken
+├── Indexing/   SearchReleases · Release · ReleaseMapper   (Newznab search + RSS read side)
+└── Settings/   SettingsHandlers   (download dir, concurrency, refresh interval)
 ```
 
 | | Touches | Runs on | Example |
 |---|---|---|---|
-| **Command** | our own state (write) | Api, Agents | `EnqueueDownload`, `UpsertEpisodes` |
-| **Query** | our own state (read) | Api | `SearchCatalog` (Newznab), `GetQueue` (SABnzbd) |
-| **Action** | the outside world — **IO-driven** | **Agents** | `ArdCrawling`, `ResolveStream`, `DownloadEpisode` |
+| **Command** | our own state (write) | Api, Agents | `StartDownloadCommand`, `UpsertEpisodes` |
+| **Query** | our own state (read) | Api, Web | `SearchReleases` (Newznab), `GetDownloadQueue` (SABnzbd) |
+| **Action** | the outside world — **IO-driven** | **Agents** | `CrawlShowHandler`, `RunDownloadHandler` |
 
 **Rule:** Actions orchestrate external IO (via Infrastructure ports) and emit Commands/events;
-Commands persist; Queries read. A new file goes in `Application/<Slice>/<Action|Command|Query>/`.
+Commands persist; Queries read.
+
+**File convention (as actually built — no `Action/`/`Command/`/`Query/` subfolders):** slices are
+**flat**, one file per use-case named after it (`Crawling/CrawlShow.cs`), and the CQRS/A split is
+marked by banner comments *inside* the file:
+
+```csharp
+// ============================================================
+// Message
+// ============================================================
+public record CrawlShowCommand(string ProviderKey, string ShowQuery);
+
+// ============================================================
+// Action (IO-driven, DR-009)
+// ============================================================
+public class CrawlShowHandler(...)
+```
+
+**Ports live in `Domain/Interfaces/`** — `IBroadcasterCrawler`, `ICatalogProvider`,
+`IDownloadProvider`, `IDownloadQueue`, `IEgressProxyProvider`, `IMessageDispatcher`, `IRepositories`.
+There is no `Application/Abstractions/`.
 
 ### Persistence & messaging
 
 - **Postgres + EF Core** (adapters in `Infrastructure/Persistence`). Aspire provisions Postgres.
-  Provider is abstracted (`AddInfrastructure(DbProviderOptions)`) — postgres default, sqlite/mssql
-  swappable. (No SQLite single-owner dance — DR-002 is superseded.)
+  Provider is abstracted (`AddInfrastructure(DbProviderOptions)`) — postgres default, **mssql**
+  swappable. (No SQLite single-owner dance — DR-002 is superseded.) **SQLite was removed entirely**
+  (unused in production; it dragged in a vulnerable `SQLitePCLRaw` — NU1903). Repository tests run
+  against **real Postgres via Testcontainers**, so they need a running Docker daemon.
 - **Wolverine** is the mediator + bus + transactional outbox. **The transport is an Infrastructure
   concern**: **Postgres transport by default** (durable, no extra container), **RabbitMQ opt-in** by
   config for scale-out. Application only sees message contracts + a dispatch port.
@@ -106,21 +140,46 @@ a new `Application/<Broadcaster>` slice + an Infrastructure HTTP client + a `Pre
 ### Enforced
 
 This architecture is enforced by **ArchUnitNET** architecture tests in `tests/Architecture.Tests`
-(layer-dependency rules, slice isolation). Keep them green.
+(4 rules: Domain depends on no other layer · Application depends only on Domain · Infrastructure
+does not depend on Presentation · a slice does not depend on sibling slices). Keep them green.
 
 ## Common commands
 
+**Nuke** (`build/Build.cs`) is the build entry point and what CI runs — targets `Compile`, `Test`,
+`TestLive`:
+
+```bash
+./build.sh Test          # macOS/Linux — restore + compile + unit tests   (build.cmd on Windows)
+./build.sh TestLive      # + Live.Tests: real ARD/ZDF network crawls & downloads (~5 min)
+```
+
+**`Test` needs Docker running** — `Infrastructure.Tests` spins up a Postgres container
+(Testcontainers) shared across its repository fixtures via `PostgresCollection`.
+
+Plain SDK commands work too:
+
 ```bash
 dotnet restore && dotnet build
-dotnet test                                    # all tests (incl. Architecture)
+dotnet test                                    # all tests (incl. Architecture + Live)
 
 # Run the whole fleet locally via Aspire (dashboard on localhost:15000-ish)
 dotnet run --project src/Presentation/AppHost
 
-# EF Core migrations — model lives in Infrastructure, a host is the startup project
-# The model + design-time factory live in Infrastructure; no startup project needed.
+# EF Core migrations — the model + design-time factory live in Infrastructure;
+# no startup project needed.
 dotnet ef migrations add <Name> --project src/Infrastructure --context AppDbContext
 ```
+
+`tests/Live.Tests` hit the real broadcasters — they are **not** hermetic and need network (plus
+`KRAUTWATCH_TEST_PROXY` for the geo-restricted cases). `dotnet test` runs them; prefer
+`./build.sh Test` for a fast inner loop.
+
+### *arr-facing auth (current state)
+
+One instance API key, config key **`Krautwatch:ApiKey`** (not on `AppSettings`), enforced by
+`ApiKeyGuard` across both the Newznab and SABnzbd surfaces. Unset = fully open (dev default);
+Newznab `t=caps` stays open regardless so Prowlarr can probe. Real auth (pluggable port + OIDC)
+is tracked as a backlog item — see the Auth issue.
 
 System dependency: **ffmpeg** on PATH (the Downloader agent's image bundles it).
 
