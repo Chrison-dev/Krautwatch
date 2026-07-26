@@ -113,16 +113,59 @@ public class EpisodeRepository(AppDbContext db) : IEpisodeRepository
         if (batch.Count > 0) await UpsertBatchAsync(batch, ct);
     }
 
+    // Upserts a whole crawl graph (Channel → Show → Episode → EpisodeStream). Crawlers build fresh,
+    // untracked entities and share one Channel/Show instance across a batch, so we set each entity's
+    // state by existence — INSERT when new, UPDATE when present — instead of blindly re-inserting
+    // (which would duplicate-key on the shared Channel/Show or throw on a not-yet-persisted row).
     private async Task UpsertBatchAsync(List<Episode> batch, CancellationToken ct)
     {
+        db.ChangeTracker.Clear();
+
+        // Channels first (distinct by id) so Shows can reference already-tracked channels.
+        foreach (var channel in DistinctById(batch.Select(e => e.Show?.Channel)))
+        {
+            var exists = await db.Channels.AnyAsync(c => c.Id == channel.Id, ct);
+            db.Entry(channel).State = exists ? EntityState.Modified : EntityState.Added;
+        }
+
+        foreach (var show in DistinctById(batch.Select(e => e.Show)))
+        {
+            var exists = await db.Shows.AnyAsync(s => s.Id == show.Id, ct);
+            db.Entry(show).State = exists ? EntityState.Modified : EntityState.Added;
+        }
+
         var ids = batch.Select(e => e.Id).ToHashSet();
-        var existing = await db.Episodes.Where(e => ids.Contains(e.Id)).Select(e => e.Id).ToHashSetAsync(ct);
+        var existingEpisodes = await db.Episodes
+            .Where(e => ids.Contains(e.Id)).Select(e => e.Id).ToHashSetAsync(ct);
+
         foreach (var episode in batch)
         {
-            if (existing.Contains(episode.Id)) db.Episodes.Update(episode);
-            else await db.Episodes.AddAsync(episode, ct);
+            var episodeExists = existingEpisodes.Contains(episode.Id);
+            db.Entry(episode).State = episodeExists ? EntityState.Modified : EntityState.Added;
+
+            // Setting an entry's state explicitly does not cascade to children, so stream rows are
+            // stated individually. Stream ids are derived from the episode id and stable across crawls.
+            foreach (var stream in episode.Streams)
+            {
+                var streamExists = episodeExists && await db.EpisodeStreams.AnyAsync(s => s.Id == stream.Id, ct);
+                db.Entry(stream).State = streamExists ? EntityState.Modified : EntityState.Added;
+            }
         }
+
         await db.SaveChangesAsync(ct);
+        db.ChangeTracker.Clear();
     }
+
+    private static IEnumerable<T> DistinctById<T>(IEnumerable<T?> items) where T : class =>
+        items.Where(x => x is not null)
+             .GroupBy(x => KeyOf(x!))
+             .Select(g => g.First()!);
+
+    private static string KeyOf(object entity) => entity switch
+    {
+        Channel c => c.Id,
+        Show s => s.Id,
+        _ => entity.GetHashCode().ToString(),
+    };
 }
 
