@@ -23,6 +23,7 @@ builder.Services.AddApplication();
 var app = builder.Build();
 
 app.MapDefaultEndpoints(); // /health, /alive from ServiceDefaults
-app.MapNewznabEndpoints();
+app.MapNewznabEndpoints();  // indexer: t=caps|search|tvsearch + /download
+app.MapSabnzbdEndpoints();  // download client: mode=version|get_config|addfile|addurl|queue|history
 
 app.Run();

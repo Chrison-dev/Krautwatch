@@ -8,7 +8,8 @@ namespace Krautwatch.Application.Indexing;
 /// <see cref="Release"/>. Copies the raw fields (with a couple of renames/flattens); the release
 /// <c>Title</c>, <c>Size</c> and <c>Category</c> are computed on the record itself.
 /// </summary>
-[Mapper]
+// Only the target must be fully mapped — a Release deliberately ignores most Episode fields.
+[Mapper(RequiredMappingStrategy = RequiredMappingStrategy.Target)]
 public static partial class ReleaseMapper
 {
     [MapProperty(nameof(Episode.Id), nameof(Release.Guid))]

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Xml.Linq;
+using Krautwatch.Application.Downloads;
 using Krautwatch.Application.Indexing;
 
 namespace Krautwatch.Api.NewznabIndexerApi.Newznab;
@@ -13,8 +14,6 @@ public static class NewznabXml
 {
     private static readonly XNamespace Nz = "http://www.newznab.com/DTD/2010/feeds/attributes/";
     private static readonly XNamespace NzbNs = "http://www.newzbin.com/DTD/2003/nzb";
-
-    public const string TokenMetaType = "krautwatch-token";
 
     public static string Capabilities() =>
         Doc(new XElement("caps",
@@ -69,7 +68,7 @@ public static class NewznabXml
     public static string Nzb(string token) =>
         Doc(new XElement(NzbNs + "nzb",
             new XElement(NzbNs + "head",
-                new XElement(NzbNs + "meta", new XAttribute("type", TokenMetaType), token))));
+                new XElement(NzbNs + "meta", new XAttribute("type", NzbToken.MetaType), token))));
 
     private static string Doc(XElement root) =>
         new XDeclaration("1.0", "UTF-8", null) + Environment.NewLine + root;

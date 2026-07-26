@@ -145,5 +145,6 @@ public static class DownloadJobMapper
         FileSizeBytes:   job.FileSizeBytes,
         CreatedAt:       job.CreatedAt,
         StartedAt:       job.StartedAt,
-        CompletedAt:     job.CompletedAt);
+        CompletedAt:     job.CompletedAt,
+        Active:          job.IsActive);
 }

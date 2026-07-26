@@ -1,3 +1,4 @@
+using Krautwatch.Api.NewznabIndexerApi.Auth;
 using Krautwatch.Api.NewznabIndexerApi.Newznab;
 using Krautwatch.Application.Indexing;
 
@@ -36,12 +37,12 @@ public static class NewznabEndpoints
 
             case "search":
             case "tvsearch":
-                if (Unauthorized(config, apikey, out var deny)) return deny!;
+                if (!ApiKeyGuard.IsAuthorized(config, apikey)) return Denied();
 
                 var releases = await search.HandleAsync(new SearchReleasesQuery(q, season, ep, limit ?? 100), ct);
 
                 var baseUrl = $"{http.Request.Scheme}://{http.Request.Host}";
-                var key = ConfiguredKey(config);
+                var key = ApiKeyGuard.Configured(config);
                 return Xml(NewznabXml.Feed(releases, r =>
                 {
                     var url = $"{baseUrl}/download?token={Uri.EscapeDataString(r.DownloadToken)}";
@@ -55,31 +56,15 @@ public static class NewznabEndpoints
 
     private static IResult HandleDownload(HttpContext http, IConfiguration config, string? token, string? apikey)
     {
-        if (Unauthorized(config, apikey, out var deny)) return deny!;
+        if (!ApiKeyGuard.IsAuthorized(config, apikey)) return Denied();
         if (string.IsNullOrWhiteSpace(token)) return Results.BadRequest("Missing 'token'.");
 
         http.Response.Headers.ContentDisposition = "attachment; filename=\"krautwatch.nzb\"";
         return Results.Content(NewznabXml.Nzb(token), "application/x-nzb");
     }
 
-    private static string? ConfiguredKey(IConfiguration config)
-    {
-        var key = config["Newznab:ApiKey"];
-        return string.IsNullOrWhiteSpace(key) ? null : key;
-    }
-
-    // With a key configured, search/download require a match; without one, everything is open (dev).
-    private static bool Unauthorized(IConfiguration config, string? provided, out IResult? deny)
-    {
-        var key = ConfiguredKey(config);
-        if (key is null || string.Equals(key, provided, StringComparison.Ordinal))
-        {
-            deny = null;
-            return false;
-        }
-        deny = Results.Json(new { error = new { code = 100, description = "Incorrect or missing API key." } }, statusCode: 401);
-        return true;
-    }
+    private static IResult Denied() =>
+        Results.Json(new { error = new { code = 100, description = "Incorrect or missing API key." } }, statusCode: 401);
 
     private static IResult Xml(string xml) => Results.Content(xml, "application/xml");
 }
