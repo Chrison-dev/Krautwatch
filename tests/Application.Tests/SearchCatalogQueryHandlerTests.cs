@@ -56,7 +56,7 @@ public class SearchCatalogQueryHandlerTests
             .Returns(episodes);
 
         // Act
-        var results = await _sut.HandleAsync(new SearchCatalogQuery("tagesschau"));
+        var results = await _sut.HandleAsync(new SearchCatalogQuery("tagesschau"), TestContext.Current.CancellationToken);
 
         // Assert
         results.Count.ShouldBe(1);
@@ -80,7 +80,7 @@ public class SearchCatalogQueryHandlerTests
             .SearchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(new List<Episode>());
 
-        var results = await _sut.HandleAsync(new SearchCatalogQuery("noresults"));
+        var results = await _sut.HandleAsync(new SearchCatalogQuery("noresults"), TestContext.Current.CancellationToken);
 
         results.ShouldBeEmpty();
     }
@@ -92,7 +92,7 @@ public class SearchCatalogQueryHandlerTests
             .SearchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(new List<Episode>());
 
-        await _sut.HandleAsync(new SearchCatalogQuery("tagesthemen"));
+        await _sut.HandleAsync(new SearchCatalogQuery("tagesthemen"), TestContext.Current.CancellationToken);
 
         await _repository
             .Received(1)

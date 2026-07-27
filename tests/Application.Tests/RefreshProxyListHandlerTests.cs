@@ -22,7 +22,7 @@ public class RefreshProxyListHandlerTests
         source.FetchAsync(Arg.Any<CancellationToken>()).Returns([P("1.1.1.1"), P("2.2.2.2")]);
         var repo = Substitute.For<IProxyRepository>();
 
-        await new RefreshProxyListHandler(source, repo, NullLogger<RefreshProxyListHandler>.Instance).HandleAsync();
+        await new RefreshProxyListHandler(source, repo, NullLogger<RefreshProxyListHandler>.Instance).HandleAsync(TestContext.Current.CancellationToken);
 
         await repo.Received(1).UpsertBatchAsync(
             Arg.Is<IEnumerable<Proxy>>(ps => ps != null && ps.Count() == 2), Arg.Any<CancellationToken>());
@@ -35,7 +35,7 @@ public class RefreshProxyListHandlerTests
         source.FetchAsync(Arg.Any<CancellationToken>()).Returns([]);
         var repo = Substitute.For<IProxyRepository>();
 
-        await new RefreshProxyListHandler(source, repo, NullLogger<RefreshProxyListHandler>.Instance).HandleAsync();
+        await new RefreshProxyListHandler(source, repo, NullLogger<RefreshProxyListHandler>.Instance).HandleAsync(TestContext.Current.CancellationToken);
 
         await repo.DidNotReceive().UpsertBatchAsync(Arg.Any<IEnumerable<Proxy>>(), Arg.Any<CancellationToken>());
     }

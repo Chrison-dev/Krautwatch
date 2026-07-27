@@ -41,7 +41,7 @@ public class CrawlShowHandlerTests
         var repo = Substitute.For<IEpisodeRepository>();
 
         var handler = new CrawlShowHandler([otherProvider, zdf], repo, NullLogger<CrawlShowHandler>.Instance);
-        await handler.HandleAsync(new CrawlShowCommand("zdf", "heute-show"));
+        await handler.HandleAsync(new CrawlShowCommand("zdf", "heute-show"), TestContext.Current.CancellationToken);
 
         zdf.LastQuery.ShouldBe("heute-show");
         otherProvider.LastQuery.ShouldBeNull(); // the ARD crawler must not be invoked
@@ -56,7 +56,7 @@ public class CrawlShowHandlerTests
         var repo = Substitute.For<IEpisodeRepository>();
 
         var handler = new CrawlShowHandler([zdf], repo, NullLogger<CrawlShowHandler>.Instance);
-        await handler.HandleAsync(new CrawlShowCommand("ZDF", "heute-show"));
+        await handler.HandleAsync(new CrawlShowCommand("ZDF", "heute-show"), TestContext.Current.CancellationToken);
 
         zdf.LastQuery.ShouldBe("heute-show");
         await repo.Received(1).UpsertManyAsync(Arg.Any<IEnumerable<Episode>>(), Arg.Any<CancellationToken>());
@@ -68,7 +68,7 @@ public class CrawlShowHandlerTests
         var repo = Substitute.For<IEpisodeRepository>();
 
         var handler = new CrawlShowHandler([], repo, NullLogger<CrawlShowHandler>.Instance);
-        await handler.HandleAsync(new CrawlShowCommand("kika", "Biene Maja"));
+        await handler.HandleAsync(new CrawlShowCommand("kika", "Biene Maja"), TestContext.Current.CancellationToken);
 
         await repo.DidNotReceive().UpsertManyAsync(Arg.Any<IEnumerable<Episode>>(), Arg.Any<CancellationToken>());
     }
@@ -80,7 +80,7 @@ public class CrawlShowHandlerTests
         var repo = Substitute.For<IEpisodeRepository>();
 
         var handler = new CrawlShowHandler([ard], repo, NullLogger<CrawlShowHandler>.Instance);
-        await handler.HandleAsync(new CrawlShowCommand("ard", "Nonexistent Show"));
+        await handler.HandleAsync(new CrawlShowCommand("ard", "Nonexistent Show"), TestContext.Current.CancellationToken);
 
         await repo.DidNotReceive().UpsertManyAsync(Arg.Any<IEnumerable<Episode>>(), Arg.Any<CancellationToken>());
     }

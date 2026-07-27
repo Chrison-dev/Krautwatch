@@ -77,7 +77,7 @@ public class EpisodeRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task GetByIdAsync_ExistingEpisode_ReturnsEpisodeWithStreams()
     {
-        var result = await _sut.GetByIdAsync("ep-1");
+        var result = await _sut.GetByIdAsync("ep-1", TestContext.Current.CancellationToken);
 
         result.ShouldNotBeNull();
         result.Title.ShouldBe("Tagesschau 20 Uhr");
@@ -88,14 +88,14 @@ public class EpisodeRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task GetByIdAsync_NonExistentId_ReturnsNull()
     {
-        var result = await _sut.GetByIdAsync("does-not-exist");
+        var result = await _sut.GetByIdAsync("does-not-exist", TestContext.Current.CancellationToken);
         result.ShouldBeNull();
     }
 
     [Fact]
     public async Task SearchAsync_MatchingTitle_ReturnsResults()
     {
-        var results = await _sut.SearchAsync("tagesschau");
+        var results = await _sut.SearchAsync("tagesschau", TestContext.Current.CancellationToken);
 
         results.ShouldNotBeEmpty();
         results.ShouldContain(e => e.Title == "Tagesschau 20 Uhr");
@@ -104,7 +104,7 @@ public class EpisodeRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task SearchAsync_MatchingDescription_ReturnsResults()
     {
-        var results = await _sut.SearchAsync("nachrichten");
+        var results = await _sut.SearchAsync("nachrichten", TestContext.Current.CancellationToken);
 
         results.ShouldNotBeEmpty();
         results.ShouldContain(e => e.Id == "ep-1");
@@ -113,14 +113,14 @@ public class EpisodeRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task SearchAsync_NoMatch_ReturnsEmpty()
     {
-        var results = await _sut.SearchAsync("zdfmediathek-xyz-nomatch");
+        var results = await _sut.SearchAsync("zdfmediathek-xyz-nomatch", TestContext.Current.CancellationToken);
         results.ShouldBeEmpty();
     }
 
     [Fact]
     public async Task GetByChannelAsync_KnownChannel_ReturnsEpisodes()
     {
-        var results = await _sut.GetByChannelAsync("ard");
+        var results = await _sut.GetByChannelAsync("ard", ct: TestContext.Current.CancellationToken);
 
         results.Count.ShouldBe(2);
         results.ShouldAllBe(e => e.Show.Channel.Id == "ard");
@@ -129,8 +129,8 @@ public class EpisodeRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task UpsertManyAsync_NewEpisodes_AreInserted()
     {
-        var channel = await _db.Channels.FindAsync("ard");
-        var show = await _db.Shows.FindAsync("show-1");
+        var channel = await _db.Channels.FindAsync(new object[] { "ard" }, TestContext.Current.CancellationToken);
+        var show = await _db.Shows.FindAsync(new object[] { "show-1" }, TestContext.Current.CancellationToken);
 
         var newEpisodes = new[]
         {
@@ -146,9 +146,9 @@ public class EpisodeRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
             }
         };
 
-        await _sut.UpsertManyAsync(newEpisodes);
+        await _sut.UpsertManyAsync(newEpisodes, TestContext.Current.CancellationToken);
 
-        var result = await _sut.GetByIdAsync("ep-new-1");
+        var result = await _sut.GetByIdAsync("ep-new-1", TestContext.Current.CancellationToken);
         result.ShouldNotBeNull();
         result.Title.ShouldBe("New Episode");
     }
@@ -182,12 +182,12 @@ public class EpisodeRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
             ]
         }).ToList();
 
-        await _sut.UpsertManyAsync(episodes);
+        await _sut.UpsertManyAsync(episodes, TestContext.Current.CancellationToken);
 
-        (await _db.Channels.FindAsync("zdf")).ShouldNotBeNull();
-        (await _db.Shows.FindAsync("zdf:heute-show")).ShouldNotBeNull();
+        (await _db.Channels.FindAsync(new object[] { "zdf" }, TestContext.Current.CancellationToken)).ShouldNotBeNull();
+        (await _db.Shows.FindAsync(new object[] { "zdf:heute-show" }, TestContext.Current.CancellationToken)).ShouldNotBeNull();
 
-        var persisted = await _sut.GetByIdAsync("zdf:doc-1");
+        var persisted = await _sut.GetByIdAsync("zdf:doc-1", TestContext.Current.CancellationToken);
         persisted.ShouldNotBeNull();
         persisted.Show.Channel.Name.ShouldBe("ZDF");
         persisted.Streams.ShouldHaveSingleItem().Url.ShouldBe("https://cdn.zdf.de/doc-1.mp4");
@@ -212,10 +212,10 @@ public class EpisodeRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
             ]
         };
 
-        await _sut.UpsertManyAsync([Build("first title")]);
-        await _sut.UpsertManyAsync([Build("updated title")]);
+        await _sut.UpsertManyAsync([Build("first title")], TestContext.Current.CancellationToken);
+        await _sut.UpsertManyAsync([Build("updated title")], TestContext.Current.CancellationToken);
 
-        var all = await _sut.GetByShowAsync("ardx:extra-3");
+        var all = await _sut.GetByShowAsync("ardx:extra-3", TestContext.Current.CancellationToken);
         all.ShouldHaveSingleItem().Title.ShouldBe("updated title");
     }
 

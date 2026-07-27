@@ -29,7 +29,7 @@ public class BroadcasterCrawlerLiveTests
     {
         var crawler = new ArdBroadcasterCrawler(new ArdCatalogClient(Http), "ard", "ard", "ARD");
 
-        var episodes = await crawler.CrawlShowAsync("Extra 3");
+        var episodes = await crawler.CrawlShowAsync("Extra 3", TestContext.Current.CancellationToken);
 
         episodes.ShouldNotBeEmpty();
         var episode = episodes[0];
@@ -48,7 +48,7 @@ public class BroadcasterCrawlerLiveTests
     {
         var crawler = new ZdfBroadcasterCrawler(new ZdfCatalogClient(Http));
 
-        var episodes = await crawler.CrawlShowAsync("heute-show");
+        var episodes = await crawler.CrawlShowAsync("heute-show", TestContext.Current.CancellationToken);
 
         episodes.ShouldNotBeEmpty();
         episodes.ShouldAllBe(e => e.Id.StartsWith("zdf:"));

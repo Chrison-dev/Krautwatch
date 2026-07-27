@@ -56,7 +56,7 @@ public class DownloadJobRepositoryTests(PostgresFixture postgres) : IAsyncLifeti
         var older = await AddQueuedAsync(DateTimeOffset.UtcNow.AddMinutes(-10));
         await AddQueuedAsync(DateTimeOffset.UtcNow.AddMinutes(-1));
 
-        var claimed = await Repo().TryClaimNextAsync("worker-1");
+        var claimed = await Repo().TryClaimNextAsync("worker-1", TestContext.Current.CancellationToken);
 
         claimed.ShouldNotBeNull();
         claimed!.Id.ShouldBe(older);
@@ -68,7 +68,7 @@ public class DownloadJobRepositoryTests(PostgresFixture postgres) : IAsyncLifeti
     [Fact]
     public async Task TryClaimNext_returns_null_when_nothing_is_queued()
     {
-        (await Repo().TryClaimNextAsync("worker-1")).ShouldBeNull();
+        (await Repo().TryClaimNextAsync("worker-1", TestContext.Current.CancellationToken)).ShouldBeNull();
     }
 
     [Fact]
@@ -76,20 +76,20 @@ public class DownloadJobRepositoryTests(PostgresFixture postgres) : IAsyncLifeti
     {
         await AddQueuedAsync(DateTimeOffset.UtcNow.AddMinutes(-5));
 
-        (await Repo().TryClaimNextAsync("worker-1")).ShouldNotBeNull();
-        (await Repo().TryClaimNextAsync("worker-2")).ShouldBeNull(); // the only job is already claimed
+        (await Repo().TryClaimNextAsync("worker-1", TestContext.Current.CancellationToken)).ShouldNotBeNull();
+        (await Repo().TryClaimNextAsync("worker-2", TestContext.Current.CancellationToken)).ShouldBeNull(); // the only job is already claimed
     }
 
     [Fact]
     public async Task ReclaimStale_requeues_this_workers_downloading_jobs()
     {
         var id = await AddQueuedAsync(DateTimeOffset.UtcNow.AddMinutes(-5));
-        await Repo().TryClaimNextAsync("worker-1"); // → Downloading, worker-1
+        await Repo().TryClaimNextAsync("worker-1", TestContext.Current.CancellationToken); // → Downloading, worker-1
 
-        var reclaimed = await Repo().ReclaimStaleAsync("worker-1");
+        var reclaimed = await Repo().ReclaimStaleAsync("worker-1", TestContext.Current.CancellationToken);
 
         reclaimed.ShouldBe(1);
-        var job = await Repo().GetByIdAsync(id);
+        var job = await Repo().GetByIdAsync(id, TestContext.Current.CancellationToken);
         job!.Status.ShouldBe(DownloadStatus.Queued);
         job.WorkerId.ShouldBeNull();
     }
@@ -98,9 +98,9 @@ public class DownloadJobRepositoryTests(PostgresFixture postgres) : IAsyncLifeti
     public async Task ReclaimStale_leaves_other_workers_jobs_alone()
     {
         await AddQueuedAsync(DateTimeOffset.UtcNow.AddMinutes(-5));
-        await Repo().TryClaimNextAsync("worker-1");
+        await Repo().TryClaimNextAsync("worker-1", TestContext.Current.CancellationToken);
 
-        (await Repo().ReclaimStaleAsync("worker-2")).ShouldBe(0);
+        (await Repo().ReclaimStaleAsync("worker-2", TestContext.Current.CancellationToken)).ShouldBe(0);
     }
 
     [Fact]
@@ -108,9 +108,9 @@ public class DownloadJobRepositoryTests(PostgresFixture postgres) : IAsyncLifeti
     {
         var id = await AddQueuedAsync(DateTimeOffset.UtcNow);
 
-        await Repo().DeleteAsync(id);
+        await Repo().DeleteAsync(id, TestContext.Current.CancellationToken);
 
-        (await Repo().GetByIdAsync(id)).ShouldBeNull();
+        (await Repo().GetByIdAsync(id, TestContext.Current.CancellationToken)).ShouldBeNull();
     }
 
 }

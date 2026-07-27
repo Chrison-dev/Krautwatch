@@ -21,7 +21,7 @@ public class ZdfLiveTests
     [Fact]
     public async Task Search_finds_HeuteShow_episodes()
     {
-        var episodes = await Client.SearchEpisodesAsync("Heute Show");
+        var episodes = await Client.SearchEpisodesAsync("Heute Show", TestContext.Current.CancellationToken);
 
         episodes.ShouldNotBeEmpty();
         episodes.ShouldContain(e => e.Title.Contains("heute-show vom", StringComparison.OrdinalIgnoreCase));
@@ -31,10 +31,10 @@ public class ZdfLiveTests
     [Fact]
     public async Task Resolves_a_HeuteShow_progressive_MP4()
     {
-        var episodes = await Client.SearchEpisodesAsync("Heute Show");
+        var episodes = await Client.SearchEpisodesAsync("Heute Show", TestContext.Current.CancellationToken);
         var episode = episodes.First(e => e.Title.Contains("heute-show vom", StringComparison.OrdinalIgnoreCase));
 
-        var stream = await Client.ResolveBestMp4Async(episode.Canonical);
+        var stream = await Client.ResolveBestMp4Async(episode.Canonical, TestContext.Current.CancellationToken);
 
         stream.ShouldNotBeNull();
         stream!.MimeType.ShouldContain("mp4");
@@ -47,26 +47,26 @@ public class ZdfLiveTests
     {
         // Real download of a real ZDF stream, bounded to ~5 MB so it's fast + small.
         // The production Downloader agent streams the whole file; this proves the pipeline.
-        var episodes = await Client.SearchEpisodesAsync("Heute Show");
+        var episodes = await Client.SearchEpisodesAsync("Heute Show", TestContext.Current.CancellationToken);
         var episode = episodes.First(e => e.Title.Contains("heute-show vom", StringComparison.OrdinalIgnoreCase));
-        var stream = await Client.ResolveBestMp4Async(episode.Canonical);
+        var stream = await Client.ResolveBestMp4Async(episode.Canonical, TestContext.Current.CancellationToken);
         stream.ShouldNotBeNull();
 
         var path = Path.Combine(Path.GetTempPath(), $"krautwatch-heuteshow-{Guid.NewGuid():N}.mp4");
         try
         {
             const int cap = 5 * 1024 * 1024;
-            using var resp = await Http.GetAsync(stream!.Url, HttpCompletionOption.ResponseHeadersRead);
+            using var resp = await Http.GetAsync(stream!.Url, HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
             resp.EnsureSuccessStatusCode();
 
-            await using (var source = await resp.Content.ReadAsStreamAsync())
+            await using (var source = await resp.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken))
             await using (var file = File.Create(path))
             {
                 var buffer = new byte[81920];
                 long total = 0; int read;
-                while (total < cap && (read = await source.ReadAsync(buffer)) > 0)
+                while (total < cap && (read = await source.ReadAsync(buffer, TestContext.Current.CancellationToken)) > 0)
                 {
-                    await file.WriteAsync(buffer.AsMemory(0, read));
+                    await file.WriteAsync(buffer.AsMemory(0, read), TestContext.Current.CancellationToken);
                     total += read;
                 }
             }

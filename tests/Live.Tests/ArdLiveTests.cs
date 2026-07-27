@@ -25,7 +25,7 @@ public class ArdLiveTests
     [Fact]
     public async Task Search_finds_Extra3_on_ARD()
     {
-        var show = await Client.FindShowAsync("Extra 3");
+        var show = await Client.FindShowAsync("Extra 3", ct: TestContext.Current.CancellationToken);
 
         show.ShouldNotBeNull();
         show!.Title.ShouldContain("extra 3", Case.Insensitive);
@@ -35,10 +35,10 @@ public class ArdLiveTests
     [Fact]
     public async Task Fetches_Extra3_full_episodes_with_sane_metadata()
     {
-        var show = await Client.FindShowAsync("Extra 3");
+        var show = await Client.FindShowAsync("Extra 3", ct: TestContext.Current.CancellationToken);
         show.ShouldNotBeNull();
 
-        var episodes = await Client.GetFullEpisodesAsync(show!);
+        var episodes = await Client.GetFullEpisodesAsync(show!, TestContext.Current.CancellationToken);
 
         episodes.ShouldNotBeEmpty();
         // Full "extra 3" episodes follow the "extra 3 vom <date>" pattern and run ~30-50 min.
@@ -52,11 +52,11 @@ public class ArdLiveTests
     [Fact]
     public async Task Downloads_a_full_Extra3_episode()
     {
-        var show = await Client.FindShowAsync("Extra 3");
+        var show = await Client.FindShowAsync("Extra 3", ct: TestContext.Current.CancellationToken);
         show.ShouldNotBeNull();
-        var episodes = await Client.GetFullEpisodesAsync(show!);
+        var episodes = await Client.GetFullEpisodesAsync(show!, TestContext.Current.CancellationToken);
         var full = episodes.First(e => e.Title.Contains("extra 3 vom", StringComparison.OrdinalIgnoreCase));
-        var detail = await Client.FetchEpisodeDetailAsync(full);
+        var detail = await Client.FetchEpisodeDetailAsync(full, TestContext.Current.CancellationToken);
         detail.ShouldNotBeNull();
         detail!.StreamUrl.ShouldNotBeNull();
 
@@ -77,7 +77,7 @@ public class ArdKikaLiveTests
     [Fact]
     public async Task Search_finds_Biene_Maja_on_KiKA()
     {
-        var show = await Client.FindShowAsync("Biene Maja", client: "kika");
+        var show = await Client.FindShowAsync("Biene Maja", client: "kika", TestContext.Current.CancellationToken);
 
         show.ShouldNotBeNull();
         show!.Title.ShouldContain("Biene Maja", Case.Insensitive);
@@ -88,9 +88,9 @@ public class ArdKikaLiveTests
     [Fact]
     public async Task Fetches_Biene_Maja_episodes()
     {
-        var show = await Client.FindShowAsync("Biene Maja", client: "kika");
+        var show = await Client.FindShowAsync("Biene Maja", client: "kika", TestContext.Current.CancellationToken);
         show.ShouldNotBeNull();
-        var episodes = await Client.GetFullEpisodesAsync(show!);
+        var episodes = await Client.GetFullEpisodesAsync(show!, TestContext.Current.CancellationToken);
         episodes.ShouldNotBeEmpty();
     }
 }
