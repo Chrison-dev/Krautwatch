@@ -60,6 +60,7 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IProxyRepository, ProxyRepository>();
 
         // Auth — local credential store + password hashing behind Domain ports (#48).
+        services.AddScoped<IArrInstanceRepository, ArrInstanceRepository>();
         services.AddScoped<ILocalCredentialStore, LocalCredentialStore>();
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
 
