@@ -14,6 +14,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<DownloadJob> DownloadJobs => Set<DownloadJob>();
     public DbSet<AppSettings> Settings => Set<AppSettings>();
     public DbSet<Proxy> Proxies => Set<Proxy>();
+    public DbSet<AdminAccount> AdminAccounts => Set<AdminAccount>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -200,6 +201,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 CatalogRefreshIntervalHours = 6,
                 CatalogProviderKey = "mediathekview"
             });
+        });
+
+        // --------------------------------------------------------
+        // AdminAccount — the single local admin (Auth:Provider = local).
+        // Deliberately NOT seeded: no default credentials ever ship. Absence of this row is what
+        // triggers first-run setup, and the fixed singleton key means two concurrent setup posts
+        // cannot both insert.
+        // --------------------------------------------------------
+        modelBuilder.Entity<AdminAccount>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.Property(x => x.Username).IsRequired().HasMaxLength(100);
+            e.Property(x => x.PasswordHash).IsRequired().HasMaxLength(500);
         });
 
         // --------------------------------------------------------

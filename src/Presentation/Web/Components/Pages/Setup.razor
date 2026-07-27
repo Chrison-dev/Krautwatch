@@ -1,0 +1,123 @@
+@page "/setup"
+@attribute [AllowAnonymous]
+@using Krautwatch.Application.Auth
+@using FluentValidation
+@inject SetupStateHandler SetupState
+@inject CreateAdminHandler CreateAdmin
+@inject SetupToken SetupToken
+@inject NavigationManager Nav
+
+@* Static SSR deliberately (no @rendermode) — same reason as /login.
+
+   Two independent gates, both required:
+     1. no administrator may exist yet, and
+     2. the caller must present the startup token from the host log.
+   Without (2) this page would be an admin-takeover window: on a shared network whoever loads it
+   first owns the instance. See docs/plans/2026-07-27 - authentication.md *@
+
+<PageTitle>Set up Krautwatch</PageTitle>
+
+<div class="auth-card">
+    @if (!_setupRequired)
+    {
+        <h1>Already set up</h1>
+        <p class="muted">
+            This instance already has an administrator. <a href="login">Sign in</a> instead.
+        </p>
+    }
+    else if (!_tokenValid)
+    {
+        <h1>Setup token required</h1>
+        <p class="muted">
+            Open the setup link printed in the host log — for example
+            <code>docker compose logs web</code> — which includes a one-time token.
+        </p>
+    }
+    else
+    {
+        <h1>Create your administrator</h1>
+        <p class="muted">This is the only account Krautwatch creates. You can switch to OIDC later.</p>
+
+        <EditForm Model="Input!" OnValidSubmit="Submit" FormName="setup">
+            <label>
+                Username
+                <InputText @bind-Value="Input!.Username" autocomplete="username" autofocus />
+            </label>
+
+            <label>
+                Password
+                <InputText @bind-Value="Input!.Password" type="password" autocomplete="new-password" />
+            </label>
+
+            <label>
+                Confirm password
+                <InputText @bind-Value="Input!.ConfirmPassword" type="password" autocomplete="new-password" />
+            </label>
+
+            @if (_errors.Count > 0)
+            {
+                <ul class="error" role="alert">
+                    @foreach (var e in _errors)
+                    {
+                        <li>@e</li>
+                    }
+                </ul>
+            }
+
+            <button type="submit" class="primary">Create administrator</button>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromForm] private SetupInput? Input { get; set; }
+    [SupplyParameterFromQuery] private string? Token { get; set; }
+
+    private readonly List<string> _errors = [];
+    private bool _setupRequired;
+    private bool _tokenValid;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Input ??= new();
+        _setupRequired = await SetupState.IsSetupRequiredAsync();
+        _tokenValid = SetupToken.Matches(Token);
+    }
+
+    private async Task Submit()
+    {
+        _errors.Clear();
+
+        // Re-check both gates on POST: the GET-time check is for rendering only, and a form can be
+        // replayed after an administrator has been created.
+        if (!await SetupState.IsSetupRequiredAsync() || !SetupToken.Matches(Token))
+        {
+            _errors.Add("Setup is no longer available.");
+            _setupRequired = false;
+            return;
+        }
+
+        var request = new CreateAdminRequest(Input!.Username, Input.Password, Input.ConfirmPassword);
+        var validation = new CreateAdminRequestValidator().Validate(request);
+        if (!validation.IsValid)
+        {
+            _errors.AddRange(validation.Errors.Select(e => e.ErrorMessage));
+            return;
+        }
+
+        if (!await CreateAdmin.HandleAsync(request))
+        {
+            _errors.Add("An administrator already exists.");
+            return;
+        }
+
+        Nav.NavigateTo("login", forceLoad: true);
+    }
+
+    private sealed class SetupInput
+    {
+        public string Username { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+}
