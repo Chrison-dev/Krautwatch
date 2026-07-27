@@ -26,13 +26,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > Aspire-generated compose in the distribution milestone.
 >
 > **Known gaps (don't assume these exist):**
-> - **The crawl work-list is hardcoded**, not Sonarr-driven. `CrawlOptions.Targets` binds from each
->   agent's `Crawl` config section and falls back to seed shows in `Agents/{Ard,Zdf}/Program.cs`
->   (`extra 3` / `Die Biene Maja` / `heute-show`). DR-010's reach-back — poll each Sonarr/Radarr
->   instance for its `monitored` series — is **not implemented**, and neither is any
->   Sonarr/Radarr-instance entity or config UI. `Settings` is download settings only.
+> - **Search is not query-driven yet, and the crawl list is hardcoded.** `CrawlOptions.Targets` binds
+>   from each agent's `Crawl` config section and falls back to seed shows in `Agents/{Ard,Zdf}/Program.cs`
+>   (`extra 3` / `Die Biene Maja` / `heute-show`). So `t=tvsearch` only finds what has already been
+>   crawled — an unseeded show returns nothing. **DR-011** makes on-demand resolution the target and
+>   demotes the standing list to RSS-feed input; reach-back to Sonarr is an optional pre-warm, not a
+>   requirement (DR-010's work-list clause is retracted). No Sonarr/Radarr-instance config UI yet either
+>   — `Settings` is download settings only.
 > - `AppSettings.CatalogProviderKey` still defaults to `"mediathekview"`, and
->   `Infrastructure/Catalog/MediathekView` survives from the DR-001 era — de-emphasised by DR-010.
+>   `Infrastructure/Catalog/MediathekView` survives from the DR-001 era. **Do not delete it yet** —
+>   per DR-011 the filmliste is the only full-catalog source available, and it is the fallback if
+>   per-show crawling proves too narrow (#49 is on hold).
 > - Auth is a single optional API key (see below); no user/identity model.
 > - `README.md` is **pre-DR-009 and wholly wrong** (describes the dropped role system, SQLite,
 >   `Krautwatch.Worker`, the retired `/api/catalog` surface) — issue #25.
@@ -236,7 +240,9 @@ DE proxy and `./build.cmd TestLive` does the real KiKA download (else it just pr
 
 ## Architecture decisions
 
-`docs/architecture/` — **DR-009 (architecture reset) and DR-010 (arr-indexer direction) are current.**
+`docs/architecture/` — **DR-009 (architecture reset), DR-010 (arr-indexer direction) and DR-011
+(search-driven indexing) are current.** DR-011 retracts DR-010's reach-back clause: the Sonarr monitored
+list is *not* the crawl work-list.
 DR-002/004/008 are superseded; DR-001/003/005/006/007 still apply (some refined). Read the current
 DRs before structural changes.
 
