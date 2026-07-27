@@ -47,6 +47,15 @@ public interface IEpisodeRepository
     Task UpsertManyAsync(IEnumerable<Episode> episodes, CancellationToken ct = default);
 }
 
+/// <summary>Tracks which search terms have already been resolved against the broadcasters (#58).</summary>
+public interface IResolvedQueryRepository
+{
+    Task<ResolvedQuery?> GetAsync(string normalisedQuery, CancellationToken ct = default);
+
+    /// <summary>Records an attempt, inserting or replacing the existing entry for this query.</summary>
+    Task RecordAsync(ResolvedQuery attempt, CancellationToken ct = default);
+}
+
 public interface ISettingsRepository
 {
     Task<AppSettings> GetAsync(CancellationToken ct = default);

@@ -55,4 +55,20 @@ public static class ApplicationServiceExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// Enables query-driven search (#58 / DR-011): a Newznab search for a show no crawler has visited yet
+    /// resolves it on demand. Call only from a host that also registers broadcaster crawlers — without them
+    /// there is nothing to resolve against.
+    /// </summary>
+    public static IServiceCollection AddOnDemandResolution(
+        this IServiceCollection services, OnDemandResolutionOptions options)
+    {
+        // Singletons: the coalescing state and the queue must be shared process-wide, which is also why
+        // OnDemandResolver takes IServiceScopeFactory rather than a scoped repository.
+        services.AddSingleton(options);
+        services.AddSingleton<OnDemandResolver>();
+        services.AddHostedService<OnDemandResolutionService>();
+        return services;
+    }
 }

@@ -9,16 +9,43 @@ namespace Krautwatch.Application.Indexing;
 /// </summary>
 public record SearchReleasesQuery(string? Q = null, int? Season = null, int? Episode = null, int Limit = 100);
 
-public class SearchReleasesHandler(IEpisodeRepository episodes)
+/// <summary>
+/// Serves Newznab results from the catalog, resolving against the broadcasters on demand when a search term
+/// has not been crawled yet (#58 / DR-011).
+/// </summary>
+/// <remarks>
+/// <c>resolver</c> is optional, so a host that only reads the catalog needs no broadcaster clients wired in.
+/// When it is absent the behaviour is exactly the pre-#58 read-only search.
+/// </remarks>
+public class SearchReleasesHandler(IEpisodeRepository episodes, OnDemandResolver? resolver = null)
 {
     public async Task<IReadOnlyList<Release>> HandleAsync(SearchReleasesQuery query, CancellationToken ct = default)
     {
         var limit = Math.Clamp(query.Limit, 1, 500);
 
-        var found = string.IsNullOrWhiteSpace(query.Q)
-            ? await episodes.GetRecentAsync(limit, ct)
-            : await episodes.SearchAsync(query.Q!, ct);
+        // RSS (no query) is never resolved: RSS-Sync polls constantly with no particular target, so
+        // resolving here would mean crawling on a timer for nothing specific. Per DR-011 it serves the
+        // standing crawl list.
+        if (string.IsNullOrWhiteSpace(query.Q))
+            return Project(await episodes.GetRecentAsync(limit, ct), query, limit);
 
+        var matches = Project(await episodes.SearchAsync(query.Q!, ct), query, limit);
+        if (matches.Count > 0 || resolver is null)
+            return matches;
+
+        // Nothing in the catalog. Ask the broadcasters, waiting only for the configured deadline — the
+        // crawl continues in the background either way, so a later call gets the full set.
+        if (await resolver.EnsureResolvedAsync(query.Q!, ct))
+            return Project(await episodes.SearchAsync(query.Q!, ct), query, limit);
+
+        // The deadline passed with the crawl still running. Return empty rather than an error: Sonarr
+        // treats indexer errors as an availability problem and will disable an indexer that keeps failing,
+        // so "no results yet" has to stay distinguishable from "broken".
+        return matches;
+    }
+
+    private static List<Release> Project(IReadOnlyList<Episode> found, SearchReleasesQuery query, int limit)
+    {
         IEnumerable<Episode> filtered = found;
         if (query.Season is not null)
             filtered = filtered.Where(e => e.SeasonNumber == query.Season);

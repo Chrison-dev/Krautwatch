@@ -16,6 +16,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Proxy> Proxies => Set<Proxy>();
     public DbSet<AdminAccount> AdminAccounts => Set<AdminAccount>();
     public DbSet<ArrInstance> ArrInstances => Set<ArrInstance>();
+    public DbSet<ResolvedQuery> ResolvedQueries => Set<ResolvedQuery>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -237,6 +238,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .HasMaxLength(20);
 
             e.HasIndex(x => x.BaseUrl).IsUnique();
+        });
+
+        // --------------------------------------------------------
+        // ResolvedQuery — the on-demand search resolution cache (#58).
+        // Keyed on the normalised query itself; no surrogate id, because the query IS the identity.
+        // --------------------------------------------------------
+        modelBuilder.Entity<ResolvedQuery>(e =>
+        {
+            e.HasKey(x => x.Query);
+            e.Property(x => x.Query).HasMaxLength(300);
+            e.Property(x => x.ProvidersTried).HasMaxLength(200);
         });
 
         // --------------------------------------------------------

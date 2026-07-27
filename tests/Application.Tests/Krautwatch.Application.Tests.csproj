@@ -16,6 +16,9 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Shouldly" />
     <PackageReference Include="NSubstitute" />
+    <!-- BuildServiceProvider, for the OnDemandResolution harness (real scopes, since the
+         resolver deliberately uses IServiceScopeFactory rather than a captured repository). -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
 </Project>
