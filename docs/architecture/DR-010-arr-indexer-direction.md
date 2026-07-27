@@ -2,10 +2,11 @@
 
 | | |
 |---|---|
-| **Status** | Accepted |
+| **Status** | Accepted · **reach-back clause retracted by DR-011** |
 | **Date** | 2026-07-25 |
 | **Deciders** | Christian |
 | **Refines** | DR-001 (catalog provider abstraction) |
+| **Refined by** | [DR-011](DR-011-search-driven-indexing.md) — the monitored list is *not* the crawl work-list |
 
 ## Context
 
@@ -25,8 +26,12 @@ Krautwatch integrates with the `*arr` stack via the interfaces those apps alread
   catalog.
 - **Download client (SABnzbd-compatible):** queue / history / add-by-id, so Sonarr/Radarr treat
   Krautwatch as a usenet download client. Actual pulls are direct HTTP/HLS + ffmpeg, with subtitles.
-- **Reach-back:** poll each configured Sonarr/Radarr instance for its `monitored` series list; that
-  is the crawl work-list.
+- ~~**Reach-back:** poll each configured Sonarr/Radarr instance for its `monitored` series list; that
+  is the crawl work-list.~~
+  > **Retracted by [DR-011](DR-011-search-driven-indexing.md).** Neither MediathekArr nor RundfunkArr
+  > reads Sonarr's monitored list — the Newznab contract is pull-by-query, so an indexer does not need
+  > it. Search becomes query-driven; the standing crawl list feeds only the RSS feed, and reach-back is
+  > an optional pre-warm.
 
 The **UI shrinks to configuration** (Sonarr/Radarr instances, connection test) — not a browse/search
 surface.

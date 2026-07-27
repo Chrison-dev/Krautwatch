@@ -11,4 +11,5 @@
 | [DR-007](DR-007-target-framework-net10.md) | Target Framework: .NET 10 LTS | Accepted |
 | [DR-008](DR-008-single-binary-role-architecture.md) | Single-Binary Role-Switchable Worker | ~~Accepted~~ · superseded by DR-009 |
 | [DR-009](DR-009-architecture-reset.md) | Architecture Reset: Hexagonal + Vertical-Slice CQRS/A Microservices | **Accepted** |
-| [DR-010](DR-010-arr-indexer-direction.md) | Product Direction: Sonarr/Radarr Indexer | **Accepted** |
+| [DR-010](DR-010-arr-indexer-direction.md) | Product Direction: Sonarr/Radarr Indexer | **Accepted** · reach-back clause retracted by DR-011 |
+| [DR-011](DR-011-search-driven-indexing.md) | Search-Driven Indexing (the monitored list is not the work-list) | **Accepted** |
