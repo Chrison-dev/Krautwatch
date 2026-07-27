@@ -77,9 +77,9 @@ GET /download?…                              # opaque per-episode token → th
 Release titles follow Sonarr's model: shows detected as `Standard` get `… S02E52 …`, everything else
 stays `Daily` and gets `… 2026-07-10 …`. Most German public-TV content is daily/dated.
 
-> ⚠️ Auth today is one optional API key (`Krautwatch:ApiKey`). **Unset means wide open**, and the
-> `web` UI has no auth at all — don't expose either to the internet yet. See
-> [#48](../../issues/48).
+> ⚠️ The indexer/download-client surface is protected only by `Krautwatch:ApiKey`, and **unset means wide
+> open**. The `web` UI is authenticated (see below), but this machine-facing surface is not — `*arr` apps
+> can only send an `apikey`, so it cannot use the UI's login. Don't expose it to the internet yet.
 
 ---
 
@@ -103,6 +103,29 @@ section, falling back to seed shows (`Extra 3`, `Biene Maja` on ARD/KiKA; `heute
   }
 }
 ```
+
+### Authentication
+
+The UI requires a sign-in. `Auth:Provider` selects how:
+
+| Value | Behaviour |
+|---|---|
+| `local` (default) | Built-in single administrator, created on first run |
+| `oidc` | Delegate to your own identity provider — Authentik, Keycloak, Authelia, Entra *(not yet implemented)* |
+| `none` | No authentication — only for deployments already behind reverse-proxy forward-auth |
+
+**First run:** there is no administrator yet, so the `web` host logs a one-time setup link. Fetch it from
+the logs and open it:
+
+```bash
+docker compose logs web    # or the Aspire dashboard's log view
+#  warn: Krautwatch has no administrator yet.
+#        Open /setup?token=4gvr4kVGq_cVlcuT_siuL3SGhEQ to create one.
+```
+
+The token is required — `/setup` is closed without it, so nobody on your network can claim the instance
+before you do. It lives in memory only and rotates if the process restarts. Once an administrator exists,
+`/setup` never reopens.
 
 ### Downloads
 

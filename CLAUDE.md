@@ -174,12 +174,35 @@ dotnet ef migrations add <Name> --project src/Infrastructure --context AppDbCont
 `KRAUTWATCH_TEST_PROXY` for the geo-restricted cases). `dotnet test` runs them; prefer
 `./build.sh Test` for a fast inner loop.
 
-### *arr-facing auth (current state)
+### Auth — two separate surfaces (#48)
 
-One instance API key, config key **`Krautwatch:ApiKey`** (not on `AppSettings`), enforced by
-`ApiKeyGuard` across both the Newznab and SABnzbd surfaces. Unset = fully open (dev default);
-Newznab `t=caps` stays open regardless so Prowlarr can probe. Real auth (pluggable port + OIDC)
-is tracked as a backlog item — see the Auth issue.
+**Humans (`Presentation/Web`).** Scheme selected by **`Auth:Provider = local | oidc | none`** in the
+Web host's composition root, defaulting to **`local`**. The pluggable part is the *scheme*, not a single
+Domain interface: local credentials fit a port (`ILocalCredentialStore` + `IPasswordHasher`), while OIDC
+is a redirect/token protocol owned by framework middleware with nothing left to abstract. Both land on
+the same cookie and `ClaimsPrincipal`, so everything downstream is provider-agnostic.
+
+- First run has no admin, so the Web host logs a **`/setup?token=…`** link. The token is generated per
+  process (in memory, rotates on restart) — without it `/setup` is closed, which prevents the
+  admin-takeover window you get from leaving setup open until claimed.
+- Every routable page **must** carry `[Authorize]` or `[AllowAnonymous]`. Blazor has no fallback policy
+  for components, so this is enforced by `PageAuthorizationSpecs` in `tests/Architecture.Tests` rather
+  than by memory — a page with no decision fails the build's tests.
+- Only `Login`, `Logout` and `Setup` are anonymous, and that list is itself asserted.
+- `Auth:Provider = none` (for reverse-proxy forward-auth setups) works via `AnonymousAccess` middleware
+  setting `HttpContext.User`, **not** by swapping `AuthenticationStateProvider` — the provider swap only
+  takes effect on one of the two render modes.
+- Login POSTs are rate-limited (10/min/IP) via a **global** limiter with a no-limiter partition for
+  everything else. A named policy on `MapRazorComponents` would throttle the entire UI, since Blazor
+  routes every page through that one endpoint.
+- The auth pages are deliberately **static SSR** (no `@rendermode`): writing the cookie needs
+  `HttpContext` before the response starts, which an interactive circuit cannot do. Interactivity is
+  therefore declared per-page, not globally on `<Routes>`.
+
+**Machines (`Api/NewznabIndexerApi`).** One instance API key, config key **`Krautwatch:ApiKey`**, enforced
+by `ApiKeyGuard` across both the Newznab and SABnzbd surfaces. Unset = fully open (dev default); `t=caps`
+stays open regardless so Prowlarr can probe. This **cannot** become OIDC — Sonarr/Radarr can only send an
+`apikey` query parameter.
 
 System dependency: **ffmpeg** on PATH (the Downloader agent's image bundles it).
 

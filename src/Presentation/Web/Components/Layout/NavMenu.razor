@@ -1,8 +1,27 @@
 <nav class="nav">
     <a class="brand" href="">Kraut<span>watch</span></a>
     <div class="links">
-        <NavLink class="link" href="" Match="NavLinkMatch.All">Home</NavLink>
-        <NavLink class="link" href="search">Search</NavLink>
-        <NavLink class="link" href="activity">Activity</NavLink>
+        @* Hidden while signed out so /login and /setup don't advertise pages that would just bounce
+           back to the login form. *@
+        <AuthorizeView>
+            <Authorized>
+                <NavLink class="link" href="" Match="NavLinkMatch.All">Home</NavLink>
+                <NavLink class="link" href="search">Search</NavLink>
+                <NavLink class="link" href="activity">Activity</NavLink>
+            </Authorized>
+        </AuthorizeView>
+    </div>
+    <div class="account">
+        <AuthorizeView>
+            <Authorized>
+                <span class="muted small">@context.User.Identity?.Name</span>
+                @* No sign-out under Auth:Provider = none — there is no session to end, and offering it
+                   would just bounce through a login that is not required. *@
+                @if (context.User.Identity?.AuthenticationType != "None")
+                {
+                    <a class="link" href="logout">Sign out</a>
+                }
+            </Authorized>
+        </AuthorizeView>
     </div>
 </nav>

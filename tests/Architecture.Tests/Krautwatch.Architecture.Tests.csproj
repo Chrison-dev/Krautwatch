@@ -9,6 +9,9 @@
     <ProjectReference Include="..\..\src\Domain\Krautwatch.Domain.csproj" />
     <ProjectReference Include="..\..\src\Application\Krautwatch.Application.csproj" />
     <ProjectReference Include="..\..\src\Infrastructure\Krautwatch.Infrastructure.csproj" />
+    <!-- For PageAuthorizationSpecs: reflects over routable components to require an explicit
+         [Authorize]/[AllowAnonymous] on every page. -->
+    <ProjectReference Include="..\..\src\Presentation\Web\Krautwatch.Web.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -16,6 +19,7 @@
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="TngTech.ArchUnitNET" />
+    <PackageReference Include="Shouldly" />
   </ItemGroup>
 
 </Project>

@@ -1,6 +1,16 @@
+@* AuthorizeRouteView applies each page's [Authorize]/[AllowAnonymous] decision. Unauthenticated
+   visitors are sent to /login with a return URL; a page with no explicit decision is caught by the
+   AllPagesDeclareAuthorization architecture test rather than silently becoming public. *@
 <Router AppAssembly="typeof(App).Assembly">
     <Found Context="routeData">
-        <RouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)" />
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)">
+            <NotAuthorized>
+                <RedirectToLogin />
+            </NotAuthorized>
+            <Authorizing>
+                <p class="muted">Checking your session…</p>
+            </Authorizing>
+        </AuthorizeRouteView>
         <FocusOnNavigate RouteData="routeData" Selector="h1" />
     </Found>
 </Router>

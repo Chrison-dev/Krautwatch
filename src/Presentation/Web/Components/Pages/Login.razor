@@ -1,0 +1,102 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@using System.Security.Claims
+@using Krautwatch.Application.Auth
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
+@inject SignInHandler SignIn
+@inject SetupStateHandler SetupState
+@inject NavigationManager Nav
+@inject IHttpContextAccessor HttpContextAccessor
+
+@* Static SSR deliberately (no @rendermode): writing the auth cookie needs HttpContext before the
+   response has started, which an interactive circuit cannot do. *@
+
+<PageTitle>Sign in · Krautwatch</PageTitle>
+
+<div class="auth-card">
+    <h1>Sign in</h1>
+
+    @if (_setupRequired)
+    {
+        <p class="muted">
+            This instance has not been set up yet. Check the host log for the setup link —
+            it contains a one-time token.
+        </p>
+    }
+    else
+    {
+        <EditForm Model="Input!" OnValidSubmit="Submit" FormName="login">
+            <DataAnnotationsValidator />
+
+            <label>
+                Username
+                <InputText @bind-Value="Input!.Username" autocomplete="username" autofocus />
+            </label>
+
+            <label>
+                Password
+                <InputText @bind-Value="Input!.Password" type="password" autocomplete="current-password" />
+            </label>
+
+            @if (_error is not null)
+            {
+                <p class="error" role="alert">@_error</p>
+            }
+
+            <button type="submit" class="primary">Sign in</button>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromForm] private LoginInput? Input { get; set; }
+    [SupplyParameterFromQuery] private string? ReturnUrl { get; set; }
+
+    private string? _error;
+    private bool _setupRequired;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Input ??= new();
+        _setupRequired = await SetupState.IsSetupRequiredAsync();
+    }
+
+    private async Task Submit()
+    {
+        var http = HttpContextAccessor.HttpContext
+            ?? throw new InvalidOperationException("Login requires static server rendering.");
+
+        var result = await SignIn.HandleAsync(new SignInRequest(Input!.Username, Input.Password));
+        if (!result.Succeeded)
+        {
+            // One message for every failure mode — distinguishing "no such user" from "wrong password"
+            // turns this form into a username oracle.
+            _error = "Incorrect username or password.";
+            return;
+        }
+
+        var identity = new ClaimsIdentity(
+            [new Claim(ClaimTypes.Name, result.Username!), new Claim(ClaimTypes.Role, "admin")],
+            CookieAuthenticationDefaults.AuthenticationScheme);
+
+        await http.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            new ClaimsPrincipal(identity),
+            new AuthenticationProperties { IsPersistent = true });
+
+        // Only ever return to a local path — an open redirect here would be a phishing primitive.
+        var target = !string.IsNullOrEmpty(ReturnUrl) && !ReturnUrl.StartsWith("//")
+                     && Uri.TryCreate(ReturnUrl, UriKind.Relative, out _)
+            ? ReturnUrl
+            : "";
+
+        Nav.NavigateTo(target, forceLoad: true);
+    }
+
+    private sealed class LoginInput
+    {
+        public string Username { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+}

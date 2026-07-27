@@ -1,5 +1,6 @@
 using Krautwatch.Domain.Interfaces;
 using Krautwatch.Domain.Options;
+using Krautwatch.Infrastructure.Auth;
 using Krautwatch.Infrastructure.Catalog;
 using Krautwatch.Infrastructure.Catalog.MediathekView;
 using Krautwatch.Infrastructure.Crawling.Ard;
@@ -57,6 +58,10 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IDownloadJobRepository, DownloadJobRepository>();
         services.AddScoped<ISettingsRepository, SettingsRepository>();
         services.AddScoped<IProxyRepository, ProxyRepository>();
+
+        // Auth — local credential store + password hashing behind Domain ports (#48).
+        services.AddScoped<ILocalCredentialStore, LocalCredentialStore>();
+        services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
 
         return services;
     }

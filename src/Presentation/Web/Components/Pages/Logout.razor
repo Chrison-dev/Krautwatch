@@ -1,0 +1,25 @@
+@page "/logout"
+@attribute [AllowAnonymous]
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
+@inject IHttpContextAccessor HttpContextAccessor
+@inject NavigationManager Nav
+
+@* Static SSR: clearing the cookie needs HttpContext, same as sign-in. *@
+
+<PageTitle>Signing out · Krautwatch</PageTitle>
+
+<div class="auth-card">
+    <p class="muted">Signing out…</p>
+</div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var http = HttpContextAccessor.HttpContext;
+        if (http is not null)
+            await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+        Nav.NavigateTo("login", forceLoad: true);
+    }
+}

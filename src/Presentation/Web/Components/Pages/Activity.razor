@@ -1,4 +1,6 @@
 @page "/activity"
+@rendermode InteractiveServer
+@attribute [Authorize]
 @implements IDisposable
 @inject IServiceScopeFactory Scopes
 @using Krautwatch.Application.Downloads

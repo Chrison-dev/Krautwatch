@@ -1,0 +1,11 @@
+@* Sends an unauthenticated visitor to /login, preserving where they were headed. Rendered by
+   AuthorizeRouteView's NotAuthorized, so it works for both static and interactive pages. *@
+@inject NavigationManager Nav
+
+@code {
+    protected override void OnInitialized()
+    {
+        var returnUrl = Uri.EscapeDataString(Nav.ToBaseRelativePath(Nav.Uri));
+        Nav.NavigateTo($"login?returnUrl={returnUrl}", forceLoad: true);
+    }
+}

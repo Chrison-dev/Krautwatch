@@ -83,3 +83,35 @@ td.path { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-spa
 }
 .icon-btn:hover { color: var(--text); background: var(--line); }
 .icon-btn.danger:hover { color: #ff6b6b; }
+
+/* ── Auth (#48): /login and /setup ───────────────────────────── */
+.account { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+
+.auth-card {
+    max-width: 380px; margin: 8vh auto 0;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 28px;
+}
+.auth-card h1 { margin: 0 0 6px; font-size: 22px; }
+.auth-card p { margin: 0 0 20px; }
+.auth-card label { display: block; margin-bottom: 16px; color: var(--muted); font-size: 13px; }
+.auth-card input {
+    display: block; width: 100%; margin-top: 6px; padding: 9px 11px;
+    background: var(--bg); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; font-size: 15px;
+}
+.auth-card input:focus { outline: none; border-color: var(--accent); }
+.auth-card code {
+    background: var(--bg); border: 1px solid var(--line);
+    border-radius: 4px; padding: 1px 5px; font-size: 13px;
+}
+
+button.primary {
+    width: 100%; padding: 10px 14px; margin-top: 4px;
+    background: var(--accent); color: #14161a;
+    border: 0; border-radius: 6px; font-size: 15px; font-weight: 600; cursor: pointer;
+}
+button.primary:hover { filter: brightness(1.08); }
+
+.error { color: #f87171; font-size: 13px; }
+ul.error { margin: 0 0 16px; padding-left: 18px; }
