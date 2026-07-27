@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Krautwatch.Domain.Entities;
+using Krautwatch.Domain.Enums;
 using Krautwatch.Domain.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -23,14 +24,10 @@ public class OnDemandResolutionOptions
     public bool Enabled { get; set; } = true;
 
     /// <summary>
-    /// How long a search waits for a resolution before answering with what has landed so far. Bounds the
-    /// <b>wait</b>, not the crawl: Sonarr treats a slow indexer as a broken one, but the crawl continues.
-    /// </summary>
-    public TimeSpan RequestDeadline { get; set; } = TimeSpan.FromSeconds(8);
-
-    /// <summary>
     /// Budget for the background crawl, independent of any request. The ARD path is multi-hop
-    /// (A-Z widget → show page → episode list → item page), so this is generous by design.
+    /// (A-Z widget → show page → episode list → item page), so this is generous by design. Also the ceiling
+    /// on how long a search can wait in <see cref="SearchWaitMode.WaitForComplete"/> mode — no wait is ever
+    /// unbounded.
     /// </summary>
     public TimeSpan CrawlTimeout { get; set; } = TimeSpan.FromMinutes(2);
 
@@ -93,8 +90,9 @@ public sealed class OnDemandResolver(
     internal ChannelReader<string> Queue => _queue.Reader;
 
     /// <summary>
-    /// Ensures the term has been (or is being) resolved, waiting at most the request deadline. Returns true
-    /// when a resolution completed inside the deadline, so the caller knows a re-read is worthwhile.
+    /// Ensures the term has been (or is being) resolved, waiting as long as the operator has asked for.
+    /// Returns true when a resolution completed inside that window, so the caller knows a re-read is
+    /// worthwhile.
     /// </summary>
     public async Task<bool> EnsureResolvedAsync(string query, CancellationToken ct = default)
     {
@@ -117,13 +115,16 @@ public sealed class OnDemandResolver(
             return completion.Task;
         });
 
-        var finished = await Task.WhenAny(resolution, Task.Delay(options.RequestDeadline, ct));
+        // How long to wait is the operator's choice (AppSettings), not a compiled-in constant.
+        var wait = await ResolveWaitAsync(ct);
+
+        var finished = await Task.WhenAny(resolution, Task.Delay(wait, ct));
         if (finished == resolution)
             return true;
 
         logger.LogDebug(
-            "Resolution of '{Query}' still running after {Deadline}; serving what is available and letting "
-            + "the crawl finish in the background.", normalised, options.RequestDeadline);
+            "Resolution of '{Query}' still running after {Wait}; serving what is available and letting the "
+            + "crawl finish in the background.", normalised, wait);
         return false;
     }
 
@@ -137,6 +138,31 @@ public sealed class OnDemandResolver(
         _inFlight.TryRemove(key, out _);
         if (_pending.TryRemove(key, out var completion))
             completion.TrySetResult();
+    }
+
+    /// <summary>
+    /// How long to wait for a resolution, per the operator's preference.
+    /// <see cref="SearchWaitMode.WaitForComplete"/> waits up to the crawl's own ceiling — never
+    /// indefinitely, since a stuck crawl would otherwise hang the request forever.
+    /// </summary>
+    private async Task<TimeSpan> ResolveWaitAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var settings = await scope.ServiceProvider
+                .GetRequiredService<ISettingsRepository>().GetAsync(ct);
+
+            return settings.SearchWaitMode == SearchWaitMode.WaitForComplete
+                ? options.CrawlTimeout
+                : TimeSpan.FromSeconds(Math.Clamp(settings.SearchWaitSeconds, 1, 300));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Never fail a search because the preference could not be read — fall back to the safe default.
+            logger.LogWarning(ex, "Could not read the search wait preference; defaulting to 8s.");
+            return TimeSpan.FromSeconds(8);
+        }
     }
 
     private async Task<bool> IsFreshAsync(string normalised, CancellationToken ct)

@@ -130,22 +130,28 @@ before you do. It lives in memory only and rotates if the process restarts. Once
 ### What gets searched (query-driven, DR-011)
 
 A Newznab search for a show nothing has crawled yet **resolves it live** against the broadcasters, so
-Krautwatch works with no `*arr` configuration at all. The *wait* is bounded, the *crawl* is not: the request
-answers within `RequestDeadline` while the crawl finishes in the background, so the next call gets the full
-set.
+Krautwatch works with no `*arr` configuration at all.
+
+**How the first search behaves is your choice** (a setting, editable in the UI — not a rebuild):
+
+| Mode | Behaviour |
+|---|---|
+| **Return results fast** *(default)* | Answer after a short wait with whatever has resolved so far, and let the crawl finish in the background. The first search may under-report; the next one is complete and instant. Advanced: set the wait in seconds (1–300, default 8). |
+| **Wait for complete result on first query** | Wait for the resolution to finish so the first search is already complete. Slower — and if it exceeds Sonarr's own indexer timeout, Sonarr may treat the indexer as failing. Still bounded by `CrawlTimeout`; no wait is ever unbounded. |
+
+Operational knobs stay in config:
 
 ```
 Indexing:OnDemandResolution:Enabled                   # default true — kill switch
-Indexing:OnDemandResolution:RequestDeadline           # default 00:00:08 — how long a search waits
-Indexing:OnDemandResolution:CrawlTimeout              # default 00:02:00 — background crawl budget
+Indexing:OnDemandResolution:CrawlTimeout              # default 00:02:00 — background crawl budget,
+                                                      #   and the ceiling on "wait for complete"
 Indexing:OnDemandResolution:PositiveTtl               # default 06:00:00 — trust a hit this long
 Indexing:OnDemandResolution:NegativeTtl               # default 00:45:00 — trust a miss this long
 Indexing:OnDemandResolution:MaxConcurrentResolutions  # default 2 — politeness cap toward ARD/ZDF
 ```
 
-So a first search for an uncrawled show may return few or no results and complete in ~8s; the same search a
-moment later is served from Postgres in milliseconds. The RSS feed (no query) is never resolved — it serves
-the standing crawl list, since RSS-Sync polls constantly with no particular target.
+The RSS feed (no query) is never resolved — it serves the standing crawl list, since RSS-Sync polls
+constantly with no particular target.
 
 ### Downloads
 

@@ -1,5 +1,6 @@
 using FluentValidation;
 using Krautwatch.Domain.Entities;
+using Krautwatch.Domain.Enums;
 using Krautwatch.Domain.Interfaces;
 
 namespace Krautwatch.Application.Settings;
@@ -12,12 +13,16 @@ public record SettingsResponse(
     string DownloadDirectory,
     int MaxConcurrentDownloads,
     int CatalogRefreshIntervalHours,
-    string CatalogProviderKey);
+    string CatalogProviderKey,
+    SearchWaitMode SearchWaitMode,
+    int SearchWaitSeconds);
 
 public record SaveSettingsRequest(
     string DownloadDirectory,
     int MaxConcurrentDownloads,
-    int CatalogRefreshIntervalHours);
+    int CatalogRefreshIntervalHours,
+    SearchWaitMode SearchWaitMode = SearchWaitMode.ReturnFast,
+    int SearchWaitSeconds = 8);
 
 // ──────────────────────────────────────────────────────────────
 // Validator
@@ -38,6 +43,12 @@ public class SaveSettingsRequestValidator : AbstractValidator<SaveSettingsReques
         RuleFor(x => x.CatalogRefreshIntervalHours)
             .InclusiveBetween(1, 168) // 1 hour to 1 week
             .WithMessage("Refresh interval must be between 1 and 168 hours.");
+
+        // Only meaningful in ReturnFast mode, but validated regardless so a stale value cannot become
+        // active later by flipping the mode back.
+        RuleFor(x => x.SearchWaitSeconds)
+            .InclusiveBetween(1, 300)
+            .WithMessage("Search wait must be between 1 and 300 seconds.");
     }
 }
 
@@ -65,6 +76,8 @@ public class SaveSettingsHandler(ISettingsRepository repository)
         settings.DownloadDirectory          = request.DownloadDirectory;
         settings.MaxConcurrentDownloads     = request.MaxConcurrentDownloads;
         settings.CatalogRefreshIntervalHours = request.CatalogRefreshIntervalHours;
+        settings.SearchWaitMode             = request.SearchWaitMode;
+        settings.SearchWaitSeconds          = request.SearchWaitSeconds;
 
         await repository.SaveAsync(settings, ct);
         return SettingsMapper.ToResponse(settings);
@@ -77,5 +90,7 @@ file static class SettingsMapper
         DownloadDirectory:           s.DownloadDirectory,
         MaxConcurrentDownloads:      s.MaxConcurrentDownloads,
         CatalogRefreshIntervalHours: s.CatalogRefreshIntervalHours,
-        CatalogProviderKey:          s.CatalogProviderKey);
+        CatalogProviderKey:          s.CatalogProviderKey,
+        SearchWaitMode:              s.SearchWaitMode,
+        SearchWaitSeconds:           s.SearchWaitSeconds);
 }

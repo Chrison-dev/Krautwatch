@@ -1,5 +1,6 @@
 using Krautwatch.Application.Indexing;
 using Krautwatch.Domain.Entities;
+using Krautwatch.Domain.Enums;
 using Krautwatch.Domain.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -23,23 +24,30 @@ public class OnDemandResolutionTests
         public readonly FakeCrawler Crawler = new();
         public readonly IResolvedQueryRepository ResolvedQueries = Substitute.For<IResolvedQueryRepository>();
         public readonly IEpisodeRepository Episodes = Substitute.For<IEpisodeRepository>();
+        public readonly ISettingsRepository Settings = Substitute.For<ISettingsRepository>();
         public readonly OnDemandResolutionOptions Options;
         public readonly OnDemandResolver Resolver;
         private readonly OnDemandResolutionService _service;
         private readonly IServiceProvider _provider;
         private readonly CancellationTokenSource _hostLifetime = new();
 
-        public Harness(OnDemandResolutionOptions? options = null)
+        public Harness(
+            OnDemandResolutionOptions? options = null,
+            SearchWaitMode waitMode = SearchWaitMode.ReturnFast,
+            int waitSeconds = 1)
         {
-            Options = options ?? new OnDemandResolutionOptions
+            Options = options ?? new OnDemandResolutionOptions { CrawlTimeout = TimeSpan.FromSeconds(5) };
+
+            Settings.GetAsync(Arg.Any<CancellationToken>()).Returns(new AppSettings
             {
-                RequestDeadline = TimeSpan.FromMilliseconds(200),
-                CrawlTimeout = TimeSpan.FromSeconds(5),
-            };
+                SearchWaitMode = waitMode,
+                SearchWaitSeconds = waitSeconds,
+            });
 
             var services = new ServiceCollection();
             services.AddSingleton(ResolvedQueries);
             services.AddSingleton(Episodes);
+            services.AddSingleton(Settings);
             services.AddSingleton<IBroadcasterCrawler>(Crawler);
             _provider = services.BuildServiceProvider();
 
@@ -225,16 +233,14 @@ public class OnDemandResolutionTests
     [Fact]
     public async Task The_request_deadline_releases_the_caller_while_the_crawl_continues()
     {
-        using var h = new Harness(new OnDemandResolutionOptions
-        {
-            RequestDeadline = TimeSpan.FromMilliseconds(100),
-            CrawlTimeout = TimeSpan.FromSeconds(10),
-        });
+        using var h = new Harness(
+            new OnDemandResolutionOptions { CrawlTimeout = TimeSpan.FromSeconds(10) },
+            SearchWaitMode.ReturnFast, waitSeconds: 1);
         await h.StartAsync();
         h.Crawler.Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         h.Crawler.Result = [Ep()];
 
-        // The crawl is held open, so the deadline must expire first.
+        // The crawl is held open, so the wait must expire first.
         var resolved = await h.Resolver.EnsureResolvedAsync("Tatort", TestContext.Current.CancellationToken);
         resolved.ShouldBeFalse();                       // released without a completed resolution
         h.Crawler.Calls.ShouldBe(1);                    // ...but the crawl did start
@@ -255,11 +261,9 @@ public class OnDemandResolutionTests
         // Stronger than the deadline case: here the caller's token is actively cancelled, as it would be if
         // Sonarr dropped the connection. The crawl must still finish and persist, because it runs under the
         // host lifetime. If the request token were ever threaded into the crawl, this would upsert nothing.
-        using var h = new Harness(new OnDemandResolutionOptions
-        {
-            RequestDeadline = TimeSpan.FromMilliseconds(100),
-            CrawlTimeout = TimeSpan.FromSeconds(10),
-        });
+        using var h = new Harness(
+            new OnDemandResolutionOptions { CrawlTimeout = TimeSpan.FromSeconds(10) },
+            SearchWaitMode.ReturnFast, waitSeconds: 1);
         await h.StartAsync();
         h.Crawler.Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         h.Crawler.Result = [Ep()];
@@ -287,6 +291,57 @@ public class OnDemandResolutionTests
         resolved.ShouldBeFalse();
         h.Crawler.Calls.ShouldBe(0);
         await h.ResolvedQueries.DidNotReceive().GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task WaitForComplete_waits_for_a_slow_crawl_instead_of_answering_early()
+    {
+        // The operator asked for a complete first answer, so a crawl slower than any ReturnFast wait must
+        // still be waited out.
+        using var h = new Harness(
+            new OnDemandResolutionOptions { CrawlTimeout = TimeSpan.FromSeconds(10) },
+            SearchWaitMode.WaitForComplete);
+        await h.StartAsync();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        h.Crawler.Gate = gate;
+        h.Crawler.Result = [Ep()];
+
+        var search = h.Resolver.EnsureResolvedAsync("Tatort", TestContext.Current.CancellationToken);
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        search.IsCompleted.ShouldBeFalse("WaitForComplete must not answer before the crawl finishes");
+
+        gate.SetResult();
+        (await search).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task WaitForComplete_is_still_bounded_by_the_crawl_timeout()
+    {
+        // Never an unbounded wait: a stuck crawl must not hang the request forever.
+        using var h = new Harness(
+            new OnDemandResolutionOptions { CrawlTimeout = TimeSpan.FromMilliseconds(300) },
+            SearchWaitMode.WaitForComplete);
+        await h.StartAsync();
+        h.Crawler.Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var resolved = await h.Resolver.EnsureResolvedAsync("Tatort", TestContext.Current.CancellationToken);
+
+        resolved.ShouldBeFalse(); // released by the ceiling rather than hanging
+    }
+
+    [Fact]
+    public async Task An_unreadable_preference_falls_back_rather_than_failing_the_search()
+    {
+        using var h = new Harness();
+        await h.StartAsync();
+        h.Settings.GetAsync(Arg.Any<CancellationToken>())
+            .Returns<AppSettings>(_ => throw new InvalidOperationException("db down"));
+        h.Crawler.Result = [Ep()];
+
+        // Must not throw: a broken settings read costs a default wait, not a failed search.
+        var resolved = await h.Resolver.EnsureResolvedAsync("Tatort", TestContext.Current.CancellationToken);
+
+        resolved.ShouldBeTrue();
     }
 
     [Theory]

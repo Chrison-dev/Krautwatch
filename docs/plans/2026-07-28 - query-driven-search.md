@@ -71,10 +71,16 @@ serving the standing crawl list.
 **Everything is configurable** under `Indexing:OnDemandResolution` — the whole point is that an operator on
 a slow link or a fast LAN can tune it without a rebuild:
 
+> **Revised during implementation:** how long to wait is not ours to decide — it is a genuine trade-off
+> between a complete first answer and a responsive indexer, so it became a **user setting** on `AppSettings`
+> (`SearchWaitMode` = `ReturnFast` | `WaitForComplete`, plus `SearchWaitSeconds` as an advanced value for the
+> fast mode). It lives in the database rather than config precisely so the settings page can own it.
+> `WaitForComplete` is still capped by `CrawlTimeout` — an unbounded wait would hang the request on a stuck
+> crawl.
+
 | Setting | Default | Purpose |
 |---|---|---|
 | `Enabled` | `true` | Kill switch |
-| `RequestDeadline` | `00:00:08` | How long a search waits before answering |
 | `CrawlTimeout` | `00:02:00` | Budget for the background crawl, independent of the request |
 | `PositiveTtl` | `06:00:00` | How long a successful resolution is trusted |
 | `NegativeTtl` | `00:45:00` | How long an empty result is trusted |
