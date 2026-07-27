@@ -35,6 +35,12 @@ public static class ApplicationServiceExtensions
         // Settings
         services.AddScoped<GetSettingsHandler>();
         services.AddScoped<SaveSettingsHandler>();
+        // Instance CRUD only needs IArrInstanceRepository, which every host gets from AddInfrastructure,
+        // so these are safe here.
+        services.AddScoped<GetArrInstancesHandler>();
+        services.AddScoped<SaveArrInstanceHandler>();
+        services.AddScoped<DeleteArrInstanceHandler>();
+
         // NB: TestArrConnectionHandler is registered by the Web host only — it needs IArrClient, which
         // only a host that calls AddArrClient() provides. Registering it here made every host fail to
         // start under DI validate-on-build (i.e. in Development).

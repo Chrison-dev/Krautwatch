@@ -13,4 +13,11 @@
     <PackageReference Include="Riok.Mapperly" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- So masking can be unit-tested directly without widening the public API for it. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>Krautwatch.Application.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
 </Project>

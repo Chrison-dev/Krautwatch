@@ -115,3 +115,35 @@ button.primary:hover { filter: brightness(1.08); }
 
 .error { color: #f87171; font-size: 13px; }
 ul.error { margin: 0 0 16px; padding-left: 18px; }
+
+/* ── Settings (#4) ───────────────────────────────────────────── */
+.panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 20px 22px; margin-bottom: 22px;
+}
+.panel h2 { margin: 0 0 4px; font-size: 17px; }
+.panel h3 { margin: 0 0 14px; font-size: 15px; }
+.panel > p { margin: 0 0 16px; }
+.panel table { margin-bottom: 16px; }
+.panel label { display: block; margin-bottom: 14px; color: var(--muted); font-size: 13px; }
+.panel input[type=text], .panel input[type=password], .panel input[type=number], .panel select, .panel input:not([type]) {
+    display: block; margin-top: 6px; padding: 8px 10px; min-width: 280px;
+    background: var(--bg); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; font-size: 14px;
+}
+.panel input:focus, .panel select:focus { outline: none; border-color: var(--accent); }
+
+label.checkbox, label.radio { display: flex; gap: 9px; align-items: flex-start; }
+label.checkbox input, label.radio input { margin-top: 2px; }
+label.radio span { display: flex; flex-direction: column; gap: 2px; color: var(--text); }
+
+.subform {
+    border-top: 1px solid var(--line); margin-top: 16px; padding-top: 18px;
+}
+.subform .actions { display: flex; gap: 10px; align-items: center; }
+
+.advanced { margin: 4px 0 14px; }
+.advanced summary { cursor: pointer; }
+
+button.narrow { width: auto; padding: 8px 16px; }
+tr.disabled td { opacity: 0.45; }
