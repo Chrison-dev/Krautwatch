@@ -20,9 +20,9 @@ public class ProxyRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
 {
     private DbContextOptions<AppDbContext> _options = null!;
 
-    public async Task InitializeAsync() => _options = await postgres.CreateDatabaseAsync();
+    public async ValueTask InitializeAsync() => _options = await postgres.CreateDatabaseAsync();
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     private ProxyRepository Repo() => new(new AppDbContext(_options));
 

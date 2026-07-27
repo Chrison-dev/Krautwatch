@@ -20,9 +20,9 @@ public sealed class PostgresFixture : IAsyncLifetime
     private readonly PostgreSqlContainer _container =
         new PostgreSqlBuilder("postgres:17-alpine").Build();
 
-    public Task InitializeAsync() => _container.StartAsync();
+    public async ValueTask InitializeAsync() => await _container.StartAsync();
 
-    public Task DisposeAsync() => _container.DisposeAsync().AsTask();
+    public ValueTask DisposeAsync() => _container.DisposeAsync();
 
     /// <summary>
     /// Creates an isolated database with the schema applied, and returns options bound to it.

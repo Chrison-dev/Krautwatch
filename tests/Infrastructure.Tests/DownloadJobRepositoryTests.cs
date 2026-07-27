@@ -15,7 +15,7 @@ public class DownloadJobRepositoryTests(PostgresFixture postgres) : IAsyncLifeti
     // ExecuteUpdate + a re-read on the same context returns a stale tracked entity.
     private DbContextOptions<AppDbContext> _options = null!;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _options = await postgres.CreateDatabaseAsync();
 
@@ -30,7 +30,7 @@ public class DownloadJobRepositoryTests(PostgresFixture postgres) : IAsyncLifeti
         await db.SaveChangesAsync();
     }
 
-    public Task DisposeAsync() => Task.CompletedTask;
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     private DownloadJobRepository Repo() => new(new AppDbContext(_options));
 
