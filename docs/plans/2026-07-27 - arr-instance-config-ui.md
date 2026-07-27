@@ -72,8 +72,8 @@ value; only the save path accepts a plaintext key. Editing shows an empty field 
 This matters more than usual because **`Presentation/Web` currently has no authentication at all**
 (#48). Until that lands, anyone who can reach the UI can reach this page. Masking limits it to
 *writing* keys rather than *harvesting* existing ones — but it does not remove the exposure, and this
-page raises the cost of leaving #48 undone. Storage is plaintext in Postgres; encryption at rest is
-out of scope and belongs with #48's decisions.
+page raises the cost of leaving #48 undone. Storage is plaintext in Postgres — acceptable for a POC, and now tracked for replacement by **#60**
+(encryption at rest, where the real question is key management rather than the cipher).
 
 ### Test Connection is an Action that runs in a UI host
 
