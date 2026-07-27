@@ -62,6 +62,7 @@ public static class InfrastructureServiceExtensions
 
         // Auth — local credential store + password hashing behind Domain ports (#48).
         services.AddScoped<IArrInstanceRepository, ArrInstanceRepository>();
+        services.AddScoped<IResolvedQueryRepository, ResolvedQueryRepository>();
         services.AddScoped<ILocalCredentialStore, LocalCredentialStore>();
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
 

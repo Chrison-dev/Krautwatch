@@ -127,6 +127,26 @@ The token is required — `/setup` is closed without it, so nobody on your netwo
 before you do. It lives in memory only and rotates if the process restarts. Once an administrator exists,
 `/setup` never reopens.
 
+### What gets searched (query-driven, DR-011)
+
+A Newznab search for a show nothing has crawled yet **resolves it live** against the broadcasters, so
+Krautwatch works with no `*arr` configuration at all. The *wait* is bounded, the *crawl* is not: the request
+answers within `RequestDeadline` while the crawl finishes in the background, so the next call gets the full
+set.
+
+```
+Indexing:OnDemandResolution:Enabled                   # default true — kill switch
+Indexing:OnDemandResolution:RequestDeadline           # default 00:00:08 — how long a search waits
+Indexing:OnDemandResolution:CrawlTimeout              # default 00:02:00 — background crawl budget
+Indexing:OnDemandResolution:PositiveTtl               # default 06:00:00 — trust a hit this long
+Indexing:OnDemandResolution:NegativeTtl               # default 00:45:00 — trust a miss this long
+Indexing:OnDemandResolution:MaxConcurrentResolutions  # default 2 — politeness cap toward ARD/ZDF
+```
+
+So a first search for an uncrawled show may return few or no results and complete in ~8s; the same search a
+moment later is served from Postgres in milliseconds. The RSS feed (no query) is never resolved — it serves
+the standing crawl list, since RSS-Sync polls constantly with no particular target.
+
 ### Downloads
 
 `Download:Directory` sets the output path (the dev fleet points it at a temp dir; in production it's

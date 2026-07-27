@@ -1,5 +1,6 @@
 using Krautwatch.Api.NewznabIndexerApi.Endpoints;
 using Krautwatch.Application;
+using Krautwatch.Application.Indexing;
 using Krautwatch.Infrastructure;
 
 // Krautwatch Newznab indexer (DR-010) — the public *arr-facing surface. Reads the catalog and
@@ -19,6 +20,20 @@ builder.Services.AddInfrastructure(new DbProviderOptions
     ConnectionString = connectionString,
 });
 builder.Services.AddApplication();
+
+// Query-driven search (#58 / DR-011). Sonarr searching for a show no crawler has visited must not get an
+// empty feed, so this host resolves against the broadcasters on demand — which means it needs the crawler
+// clients that until now only the agents had. That makes it run an IO-driven Action, the same narrow DR-009
+// deviation recorded for TestArrConnection: a synchronous request cannot wait on the durable bus.
+var resolutionOptions = new OnDemandResolutionOptions();
+builder.Configuration.GetSection(OnDemandResolutionOptions.SectionName).Bind(resolutionOptions);
+
+if (resolutionOptions.Enabled)
+{
+    builder.Services.AddArdCrawlers(); // ARD + KiKA
+    builder.Services.AddZdfCrawler();
+    builder.Services.AddOnDemandResolution(resolutionOptions);
+}
 
 var app = builder.Build();
 
