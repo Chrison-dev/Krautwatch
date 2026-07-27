@@ -15,6 +15,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AppSettings> Settings => Set<AppSettings>();
     public DbSet<Proxy> Proxies => Set<Proxy>();
     public DbSet<AdminAccount> AdminAccounts => Set<AdminAccount>();
+    public DbSet<ArrInstance> ArrInstances => Set<ArrInstance>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -215,6 +216,27 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Id).ValueGeneratedNever();
             e.Property(x => x.Username).IsRequired().HasMaxLength(100);
             e.Property(x => x.PasswordHash).IsRequired().HasMaxLength(500);
+        });
+
+        // --------------------------------------------------------
+        // ArrInstance — configured Sonarr/Radarr instances we call OUTBOUND (#4).
+        // BaseUrl is uniquely indexed: #5 bootstraps instances from env vars and matches them by base
+        // URL, so duplicates have to be impossible at the schema level rather than by convention.
+        // --------------------------------------------------------
+        modelBuilder.Entity<ArrInstance>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).IsRequired().HasMaxLength(100);
+            e.Property(x => x.BaseUrl).IsRequired().HasMaxLength(500);
+            e.Property(x => x.ApiKey).IsRequired().HasMaxLength(200);
+            e.Property(x => x.LastTestMessage).HasMaxLength(500);
+
+            // Stored as text like the other enums, so the column stays readable in the database.
+            e.Property(x => x.Kind)
+                .HasConversion(v => v.ToString(), v => Enum.Parse<ArrKind>(v))
+                .HasMaxLength(20);
+
+            e.HasIndex(x => x.BaseUrl).IsUnique();
         });
 
         // --------------------------------------------------------
