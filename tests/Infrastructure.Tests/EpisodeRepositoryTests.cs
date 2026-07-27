@@ -15,7 +15,7 @@ public class EpisodeRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
     private AppDbContext _db = null!;
     private EpisodeRepository _sut = null!;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _db = new AppDbContext(await postgres.CreateDatabaseAsync());
         _sut = new EpisodeRepository(_db);
@@ -23,10 +23,10 @@ public class EpisodeRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
         SeedTestData();
     }
 
-    public Task DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         _db.Dispose();
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 
     private void SeedTestData()
