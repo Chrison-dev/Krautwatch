@@ -1,5 +1,6 @@
 using Krautwatch.Domain.Interfaces;
 using Krautwatch.Domain.Options;
+using Krautwatch.Infrastructure.Arr;
 using Krautwatch.Infrastructure.Auth;
 using Krautwatch.Infrastructure.Catalog;
 using Krautwatch.Infrastructure.Catalog.MediathekView;
@@ -131,6 +132,22 @@ public static class InfrastructureServiceExtensions
         services.AddHttpClient<ZdfCatalogClient>();
         services.AddScoped<IBroadcasterCrawler>(sp =>
             new ZdfBroadcasterCrawler(sp.GetRequiredService<ZdfCatalogClient>()));
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the outbound Sonarr/Radarr client (#4). Needed by any host that tests instance
+    /// connectivity or (per #6) pre-warms the crawl list from a monitored-series list.
+    /// </summary>
+    public static IServiceCollection AddArrClient(this IServiceCollection services)
+    {
+        services.AddHttpClient<IArrClient, ArrHttpClient>(http =>
+        {
+            // Short and explicit: this sits behind an operator clicking "Test", so a hung connection has
+            // to fail fast rather than leave the button spinning. HttpClient's 100s default is far too
+            // long for that.
+            http.Timeout = TimeSpan.FromSeconds(10);
+        });
         return services;
     }
 

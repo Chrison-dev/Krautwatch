@@ -35,6 +35,7 @@ public static class ApplicationServiceExtensions
         // Settings
         services.AddScoped<GetSettingsHandler>();
         services.AddScoped<SaveSettingsHandler>();
+        services.AddScoped<TestArrConnectionHandler>();
 
         // Auth (#48) — SetupToken is a singleton so it survives for the process lifetime and is
         // logged once at startup; the handlers are scoped like every other use-case.
