@@ -1,6 +1,7 @@
 using Krautwatch.Application;
 using Krautwatch.Application.Crawling;
 using Krautwatch.Infrastructure;
+using JasperFx.CodeGeneration.Model;
 using Wolverine;
 using Wolverine.Postgresql;
 
@@ -42,6 +43,12 @@ builder.UseWolverine(opts =>
 {
     opts.PersistMessagesWithPostgresql(connectionString);
     opts.Policies.UseDurableLocalQueues();
+    // Wolverine 6 changed the default ServiceLocationPolicy to NotAllowed (5.x was AllowedButWarn),
+    // which refuses to generate a handler needing container resolution. CrawlShowHandler needs it:
+    // IEnumerable<IBroadcasterCrawler> is an opaque lambda registration, and IEpisodeRepository's
+    // graph reaches EF's own DbContextOptions factory — not something we control. Restore the 5.x
+    // behaviour: allowed, but keep Wolverine's warning so the nudge to inline stays visible.
+    opts.ServiceLocationPolicy = ServiceLocationPolicy.AllowedButWarn;
     // Discover the Crawling Action (CrawlShowHandler) in the Application assembly.
     opts.Discovery.IncludeAssembly(typeof(CrawlShowCommand).Assembly);
 });
