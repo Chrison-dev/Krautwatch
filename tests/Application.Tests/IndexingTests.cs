@@ -60,7 +60,7 @@ public class SearchReleasesHandlerTests
         repo.SearchAsync("heute-show", Arg.Any<CancellationToken>())
             .Returns(new[] { Ep("zdf:doc-1", SeriesType.Daily, null, null) });
 
-        var releases = await new SearchReleasesHandler(repo).HandleAsync(new SearchReleasesQuery("heute-show"));
+        var releases = await new SearchReleasesHandler(repo).HandleAsync(new SearchReleasesQuery("heute-show"), TestContext.Current.CancellationToken);
 
         var release = releases.ShouldHaveSingleItem();
         release.Guid.ShouldBe("zdf:doc-1");
@@ -76,7 +76,7 @@ public class SearchReleasesHandlerTests
         repo.GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(new[] { Ep("zdf:doc-9", SeriesType.Daily, null, null) });
 
-        var releases = await new SearchReleasesHandler(repo).HandleAsync(new SearchReleasesQuery(Q: null));
+        var releases = await new SearchReleasesHandler(repo).HandleAsync(new SearchReleasesQuery(Q: null), TestContext.Current.CancellationToken);
 
         releases.ShouldHaveSingleItem().Guid.ShouldBe("zdf:doc-9");
         await repo.DidNotReceive().SearchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -93,7 +93,7 @@ public class SearchReleasesHandlerTests
         });
 
         var releases = await new SearchReleasesHandler(repo)
-            .HandleAsync(new SearchReleasesQuery("Die Biene Maja", Season: 2, Episode: 52));
+            .HandleAsync(new SearchReleasesQuery("Die Biene Maja", Season: 2, Episode: 52), TestContext.Current.CancellationToken);
 
         var release = releases.ShouldHaveSingleItem();
         release.Guid.ShouldBe("kika:2");

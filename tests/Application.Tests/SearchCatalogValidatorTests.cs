@@ -11,7 +11,7 @@ public class SearchCatalogQueryValidatorTests
     [Fact]
     public async Task Validate_ValidQuery_PassesValidation()
     {
-        var result = await _sut.ValidateAsync(new SearchCatalogQuery("tagesschau"));
+        var result = await _sut.ValidateAsync(new SearchCatalogQuery("tagesschau"), TestContext.Current.CancellationToken);
         result.IsValid.ShouldBeTrue();
     }
 
@@ -20,7 +20,7 @@ public class SearchCatalogQueryValidatorTests
     [InlineData(" ")]
     public async Task Validate_EmptyQuery_FailsValidation(string query)
     {
-        var result = await _sut.ValidateAsync(new SearchCatalogQuery(query));
+        var result = await _sut.ValidateAsync(new SearchCatalogQuery(query), TestContext.Current.CancellationToken);
         result.IsValid.ShouldBeFalse();
         result.Errors.ShouldContain(e => e.PropertyName == "Query");
     }
@@ -28,7 +28,7 @@ public class SearchCatalogQueryValidatorTests
     [Fact]
     public async Task Validate_SingleCharQuery_FailsValidation()
     {
-        var result = await _sut.ValidateAsync(new SearchCatalogQuery("a"));
+        var result = await _sut.ValidateAsync(new SearchCatalogQuery("a"), TestContext.Current.CancellationToken);
         result.IsValid.ShouldBeFalse();
         result.Errors.ShouldContain(e => e.ErrorMessage.Contains("2 characters"));
     }
@@ -37,7 +37,7 @@ public class SearchCatalogQueryValidatorTests
     public async Task Validate_QueryExceeding200Chars_FailsValidation()
     {
         var longQuery = new string('a', 201);
-        var result = await _sut.ValidateAsync(new SearchCatalogQuery(longQuery));
+        var result = await _sut.ValidateAsync(new SearchCatalogQuery(longQuery), TestContext.Current.CancellationToken);
         result.IsValid.ShouldBeFalse();
         result.Errors.ShouldContain(e => e.ErrorMessage.Contains("200 characters"));
     }

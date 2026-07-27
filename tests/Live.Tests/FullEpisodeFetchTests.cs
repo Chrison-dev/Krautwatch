@@ -21,12 +21,12 @@ public class FullEpisodeFetchTests
     public async Task Fetches_a_full_Extra3_episode_from_ARD()
     {
         var ard = new ArdCatalogClient(Http);
-        var show = await ard.FindShowAsync("Extra 3");
+        var show = await ard.FindShowAsync("Extra 3", ct: TestContext.Current.CancellationToken);
         show.ShouldNotBeNull();
-        var episodes = await ard.GetFullEpisodesAsync(show!);
+        var episodes = await ard.GetFullEpisodesAsync(show!, TestContext.Current.CancellationToken);
         var full = episodes.First(e => e.Title.Contains("extra 3 vom", StringComparison.OrdinalIgnoreCase));
 
-        var detail = await ard.FetchEpisodeDetailAsync(full);
+        var detail = await ard.FetchEpisodeDetailAsync(full, TestContext.Current.CancellationToken);
 
         detail.ShouldNotBeNull();
         detail!.Title.ShouldContain("extra 3 vom", Case.Insensitive);
@@ -45,12 +45,12 @@ public class FullEpisodeFetchTests
     public async Task Fetches_a_full_BieneMaja_episode_from_KiKA()
     {
         var ard = new ArdCatalogClient(Http);
-        var show = await ard.FindShowAsync("Biene Maja", client: "kika");
+        var show = await ard.FindShowAsync("Biene Maja", client: "kika", TestContext.Current.CancellationToken);
         show.ShouldNotBeNull();
-        var episodes = await ard.GetFullEpisodesAsync(show!);
+        var episodes = await ard.GetFullEpisodesAsync(show!, TestContext.Current.CancellationToken);
         var full = episodes.First();
 
-        var detail = await ard.FetchEpisodeDetailAsync(full);
+        var detail = await ard.FetchEpisodeDetailAsync(full, TestContext.Current.CancellationToken);
 
         detail.ShouldNotBeNull();
         detail!.Title.ShouldNotBeNullOrWhiteSpace();
@@ -66,10 +66,10 @@ public class FullEpisodeFetchTests
     public async Task Fetches_a_full_HeuteShow_episode_from_ZDF()
     {
         var zdf = new ZdfCatalogClient(Http);
-        var episodes = await zdf.SearchEpisodesAsync("Heute Show");
+        var episodes = await zdf.SearchEpisodesAsync("Heute Show", TestContext.Current.CancellationToken);
         var full = episodes.First(e => e.Title.Contains("heute-show vom", StringComparison.OrdinalIgnoreCase));
 
-        var detail = await zdf.FetchEpisodeDetailAsync(full);
+        var detail = await zdf.FetchEpisodeDetailAsync(full, TestContext.Current.CancellationToken);
 
         detail.ShouldNotBeNull();
         detail!.Title.ShouldContain("heute-show vom", Case.Insensitive);

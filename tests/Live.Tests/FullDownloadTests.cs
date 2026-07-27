@@ -33,10 +33,10 @@ public class FullDownloadTests
     public async Task Downloads_a_full_Extra3_episode_from_ARD()
     {
         var ard = new ArdCatalogClient(Http);
-        var show = await ard.FindShowAsync("Extra 3");
-        var full = (await ard.GetFullEpisodesAsync(show!))
+        var show = await ard.FindShowAsync("Extra 3", ct: TestContext.Current.CancellationToken);
+        var full = (await ard.GetFullEpisodesAsync(show!, TestContext.Current.CancellationToken))
             .First(e => e.Title.Contains("extra 3 vom", StringComparison.OrdinalIgnoreCase));
-        await DownloadAndVerifyAsync(await ard.FetchEpisodeDetailAsync(full));
+        await DownloadAndVerifyAsync(await ard.FetchEpisodeDetailAsync(full, TestContext.Current.CancellationToken));
     }
 
     // A DE egress proxy for local runs (#45). Set it to do the REAL geo-restricted download; leave it
@@ -48,11 +48,11 @@ public class FullDownloadTests
     public async Task Downloads_a_full_BieneMaja_episode_from_KiKA()
     {
         var ard = new ArdCatalogClient(Http);
-        var show = await ard.FindShowAsync("Biene Maja", client: "kika");
-        var full = (await ard.GetFullEpisodesAsync(show!)).First();
+        var show = await ard.FindShowAsync("Biene Maja", client: "kika", TestContext.Current.CancellationToken);
+        var full = (await ard.GetFullEpisodesAsync(show!, TestContext.Current.CancellationToken)).First();
         // Biene Maja is DACH geo-fenced. With a DE egress (KRAUTWATCH_TEST_PROXY) it downloads for real;
         // without one, the provider fails fast (geo-restricted + no egress) — tolerated here.
-        await DownloadAndVerifyAsync(await ard.FetchEpisodeDetailAsync(full),
+        await DownloadAndVerifyAsync(await ard.FetchEpisodeDetailAsync(full, TestContext.Current.CancellationToken),
             tolerateGeoBlock: string.IsNullOrWhiteSpace(TestProxy));
     }
 
@@ -60,9 +60,9 @@ public class FullDownloadTests
     public async Task Downloads_a_full_HeuteShow_episode_from_ZDF()
     {
         var zdf = new ZdfCatalogClient(Http);
-        var full = (await zdf.SearchEpisodesAsync("Heute Show"))
+        var full = (await zdf.SearchEpisodesAsync("Heute Show", TestContext.Current.CancellationToken))
             .First(e => e.Title.Contains("heute-show vom", StringComparison.OrdinalIgnoreCase));
-        await DownloadAndVerifyAsync(await zdf.FetchEpisodeDetailAsync(full));
+        await DownloadAndVerifyAsync(await zdf.FetchEpisodeDetailAsync(full, TestContext.Current.CancellationToken));
     }
 
     // ── shared: run the real provider, assert a genuine MP4 landed, then clean up ──

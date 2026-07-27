@@ -52,7 +52,7 @@ public class RunDownloadHandlerTests
         provider.DownloadAsync(job, "/downloads", Arg.Any<IProgress<double>>(), Arg.Any<CancellationToken>())
             .Returns(new DownloadResult("/downloads/ZDF/heute-show/x.mp4", 123_456));
 
-        await Sut(jobs, provider, settings).HandleAsync(job);
+        await Sut(jobs, provider, settings).HandleAsync(job, TestContext.Current.CancellationToken);
 
         job.Status.ShouldBe(DownloadStatus.Completed);
         job.OutputPath.ShouldBe("/downloads/ZDF/heute-show/x.mp4");
@@ -68,7 +68,7 @@ public class RunDownloadHandlerTests
         provider.DownloadAsync(Arg.Any<DownloadJob>(), Arg.Any<string>(), Arg.Any<IProgress<double>>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new HttpRequestException("stream 403"));
 
-        await Sut(jobs, provider, settings).HandleAsync(job);
+        await Sut(jobs, provider, settings).HandleAsync(job, TestContext.Current.CancellationToken);
 
         job.Status.ShouldBe(DownloadStatus.DownloadFailed);
         job.ErrorMessage.ShouldBe("stream 403");
@@ -80,7 +80,7 @@ public class RunDownloadHandlerTests
         var job = new DownloadJob { Id = Guid.NewGuid(), EpisodeId = "x", StreamUrl = "https://cdn/x.mp4", Quality = VideoQuality.High };
         var (jobs, provider, settings) = Deps();
 
-        await Sut(jobs, provider, settings).HandleAsync(job);
+        await Sut(jobs, provider, settings).HandleAsync(job, TestContext.Current.CancellationToken);
 
         job.Status.ShouldBe(DownloadStatus.DownloadFailed);
         await provider.DidNotReceive().DownloadAsync(Arg.Any<DownloadJob>(), Arg.Any<string>(), Arg.Any<IProgress<double>>(), Arg.Any<CancellationToken>());

@@ -67,43 +67,42 @@ public class StartDownloadHandlerTests
     public async Task ValidRequest_CreatesJobAndEnqueues()
     {
         var episode = Fixtures.MakeEpisode();
-        _episodes.GetByIdAsync("ep-1", default).Returns(episode);
+        _episodes.GetByIdAsync("ep-1", Arg.Any<CancellationToken>()).Returns(episode);
 
-        var result = await Handler().HandleAsync(new StartDownloadRequest("ep-1", "stream-1"));
+        var result = await Handler().HandleAsync(new StartDownloadRequest("ep-1", "stream-1"), TestContext.Current.CancellationToken);
 
         result.ShouldNotBeNull();
         result!.EpisodeId.ShouldBe("ep-1");
         result.Status.ShouldBe(nameof(DownloadStatus.Queued));
 
-        await _jobs.Received(1).AddAsync(Arg.Any<DownloadJob>(), default);
+        await _jobs.Received(1).AddAsync(Arg.Any<DownloadJob>(), TestContext.Current.CancellationToken);
         await _queue.Received(1).EnqueueAsync(
             Arg.Any<Guid>(),
-            "https://example.com/ep.mp4",
-            default);
+            "https://example.com/ep.mp4", TestContext.Current.CancellationToken);
     }
 
     [Fact]
     public async Task EpisodeNotFound_ReturnsNull_NoJobCreated()
     {
-        _episodes.GetByIdAsync("bad-id", default).Returns((Episode?)null);
+        _episodes.GetByIdAsync("bad-id", Arg.Any<CancellationToken>()).Returns((Episode?)null);
 
-        var result = await Handler().HandleAsync(new StartDownloadRequest("bad-id", "stream-1"));
+        var result = await Handler().HandleAsync(new StartDownloadRequest("bad-id", "stream-1"), TestContext.Current.CancellationToken);
 
         result.ShouldBeNull();
-        await _jobs.DidNotReceive().AddAsync(Arg.Any<DownloadJob>(), default);
-        await _queue.DidNotReceive().EnqueueAsync(Arg.Any<Guid>(), Arg.Any<string>(), default);
+        await _jobs.DidNotReceive().AddAsync(Arg.Any<DownloadJob>(), TestContext.Current.CancellationToken);
+        await _queue.DidNotReceive().EnqueueAsync(Arg.Any<Guid>(), Arg.Any<string>(), TestContext.Current.CancellationToken);
     }
 
     [Fact]
     public async Task StreamNotFound_ReturnsNull_NoJobCreated()
     {
         var episode = Fixtures.MakeEpisode("real-stream");
-        _episodes.GetByIdAsync("ep-1", default).Returns(episode);
+        _episodes.GetByIdAsync("ep-1", Arg.Any<CancellationToken>()).Returns(episode);
 
-        var result = await Handler().HandleAsync(new StartDownloadRequest("ep-1", "wrong-stream"));
+        var result = await Handler().HandleAsync(new StartDownloadRequest("ep-1", "wrong-stream"), TestContext.Current.CancellationToken);
 
         result.ShouldBeNull();
-        await _jobs.DidNotReceive().AddAsync(Arg.Any<DownloadJob>(), default);
+        await _jobs.DidNotReceive().AddAsync(Arg.Any<DownloadJob>(), TestContext.Current.CancellationToken);
     }
 }
 
@@ -125,13 +124,13 @@ public class CancelDownloadHandlerTests
     {
         var job = Fixtures.MakeJob();
         ApplyStatus(job, status);
-        _jobs.GetByIdAsync(job.Id, default).Returns(job);
+        _jobs.GetByIdAsync(job.Id, Arg.Any<CancellationToken>()).Returns(job);
 
-        var result = await Handler().HandleAsync(job.Id);
+        var result = await Handler().HandleAsync(job.Id, TestContext.Current.CancellationToken);
 
         result.ShouldBeTrue();
         job.Status.ShouldBe(DownloadStatus.Cancelled);
-        await _jobs.Received(1).UpdateAsync(job, default);
+        await _jobs.Received(1).UpdateAsync(job, TestContext.Current.CancellationToken);
     }
 
     [Theory]
@@ -144,20 +143,20 @@ public class CancelDownloadHandlerTests
     {
         var job = Fixtures.MakeJob();
         ApplyStatus(job, status);
-        _jobs.GetByIdAsync(job.Id, default).Returns(job);
+        _jobs.GetByIdAsync(job.Id, Arg.Any<CancellationToken>()).Returns(job);
 
-        var result = await Handler().HandleAsync(job.Id);
+        var result = await Handler().HandleAsync(job.Id, TestContext.Current.CancellationToken);
 
         result.ShouldBeFalse();
-        await _jobs.DidNotReceive().UpdateAsync(Arg.Any<DownloadJob>(), default);
+        await _jobs.DidNotReceive().UpdateAsync(Arg.Any<DownloadJob>(), TestContext.Current.CancellationToken);
     }
 
     [Fact]
     public async Task JobNotFound_ReturnsFalse()
     {
-        _jobs.GetByIdAsync(Arg.Any<Guid>(), default).Returns((DownloadJob?)null);
+        _jobs.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((DownloadJob?)null);
 
-        var result = await Handler().HandleAsync(Guid.NewGuid());
+        var result = await Handler().HandleAsync(Guid.NewGuid(), TestContext.Current.CancellationToken);
 
         result.ShouldBeFalse();
     }
@@ -197,17 +196,17 @@ public class RetryDownloadHandlerTests
     {
         var original = Fixtures.MakeJob();
         ApplyTerminal(original, status);
-        _jobs.GetByIdAsync(original.Id, default).Returns(original);
+        _jobs.GetByIdAsync(original.Id, Arg.Any<CancellationToken>()).Returns(original);
 
-        var result = await Handler().HandleAsync(original.Id);
+        var result = await Handler().HandleAsync(original.Id, TestContext.Current.CancellationToken);
 
         result.ShouldNotBeNull();
         result!.Status.ShouldBe(nameof(DownloadStatus.Queued));
         // New job created — not the original id
         result.JobId.ShouldNotBe(original.Id);
 
-        await _jobs.Received(1).AddAsync(Arg.Any<DownloadJob>(), default);
-        await _queue.Received(1).RequeueAsync(Arg.Any<Guid>(), original.StreamUrl, default);
+        await _jobs.Received(1).AddAsync(Arg.Any<DownloadJob>(), TestContext.Current.CancellationToken);
+        await _queue.Received(1).RequeueAsync(Arg.Any<Guid>(), original.StreamUrl, TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -215,32 +214,32 @@ public class RetryDownloadHandlerTests
     {
         var job = Fixtures.MakeJob();
         job.MarkCompleted("/out/file.mp4", 1024);
-        _jobs.GetByIdAsync(job.Id, default).Returns(job);
+        _jobs.GetByIdAsync(job.Id, Arg.Any<CancellationToken>()).Returns(job);
 
-        var result = await Handler().HandleAsync(job.Id);
+        var result = await Handler().HandleAsync(job.Id, TestContext.Current.CancellationToken);
 
         result.ShouldBeNull();
-        await _queue.DidNotReceive().RequeueAsync(Arg.Any<Guid>(), Arg.Any<string>(), default);
+        await _queue.DidNotReceive().RequeueAsync(Arg.Any<Guid>(), Arg.Any<string>(), TestContext.Current.CancellationToken);
     }
 
     [Fact]
     public async Task ActiveJob_ReturnsNull_NothingEnqueued()
     {
         var job = Fixtures.MakeJob(); // Queued — IsTerminal = false
-        _jobs.GetByIdAsync(job.Id, default).Returns(job);
+        _jobs.GetByIdAsync(job.Id, Arg.Any<CancellationToken>()).Returns(job);
 
-        var result = await Handler().HandleAsync(job.Id);
+        var result = await Handler().HandleAsync(job.Id, TestContext.Current.CancellationToken);
 
         result.ShouldBeNull();
-        await _queue.DidNotReceive().RequeueAsync(Arg.Any<Guid>(), Arg.Any<string>(), default);
+        await _queue.DidNotReceive().RequeueAsync(Arg.Any<Guid>(), Arg.Any<string>(), TestContext.Current.CancellationToken);
     }
 
     [Fact]
     public async Task JobNotFound_ReturnsNull()
     {
-        _jobs.GetByIdAsync(Arg.Any<Guid>(), default).Returns((DownloadJob?)null);
+        _jobs.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((DownloadJob?)null);
 
-        var result = await Handler().HandleAsync(Guid.NewGuid());
+        var result = await Handler().HandleAsync(Guid.NewGuid(), TestContext.Current.CancellationToken);
 
         result.ShouldBeNull();
     }
