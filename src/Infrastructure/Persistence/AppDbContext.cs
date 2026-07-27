@@ -195,6 +195,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.HasKey(x => x.Id);
             e.Property(x => x.DownloadDirectory).IsRequired().HasMaxLength(500);
+
+            // Text like the other enums, so the column stays readable in the database.
+            e.Property(x => x.SearchWaitMode)
+                .HasConversion(v => v.ToString(), v => Enum.Parse<SearchWaitMode>(v))
+                .HasMaxLength(20);
             e.HasData(new AppSettings
             {
                 Id = 1,
