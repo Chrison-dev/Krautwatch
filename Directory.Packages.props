@@ -4,8 +4,13 @@
   </PropertyGroup>
 
   <ItemGroup Label="Messaging (WolverineFx — Postgres transport default, DR-009)">
-    <PackageVersion Include="WolverineFx"            Version="5.18.0" />
-    <PackageVersion Include="WolverineFx.Postgresql" Version="5.18.0" />
+    <PackageVersion Include="WolverineFx"            Version="6.22.0" />
+    <PackageVersion Include="WolverineFx.Postgresql" Version="6.22.0" />
+    <!-- Wolverine 6 removed the runtime Roslyn compiler from core (GH-2876). Handler code is
+         compiled at runtime (TypeLoadMode.Dynamic), so the hosts that call UseWolverine need
+         this package — it auto-registers an IAssemblyGenerator. The alternative is pre-generated
+         code + TypeLoadMode.Static, which trades a build step for faster cold start. -->
+    <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.22.0" />
   </ItemGroup>
 
   <ItemGroup Label="EF Core">
@@ -53,8 +58,8 @@
   <ItemGroup Label="Aspire">
     <PackageVersion Include="Aspire.Hosting"                    Version="13.4.6" />
     <PackageVersion Include="Aspire.Hosting.PostgreSQL"         Version="13.4.6" />
-    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="9.3.1" />
-    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="9.4.0" />
+    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.8.0" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.8.0" />
   </ItemGroup>
 
   <ItemGroup Label="Testing">
