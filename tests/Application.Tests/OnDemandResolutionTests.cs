@@ -317,16 +317,22 @@ public class OnDemandResolutionTests
     [Fact]
     public async Task WaitForComplete_is_still_bounded_by_the_crawl_timeout()
     {
-        // Never an unbounded wait: a stuck crawl must not hang the request forever.
+        // The guarantee is "it returns", not "it returns false". Two things can end the wait — the crawl
+        // hitting its timeout (which completes the resolution, emptily) or the ceiling releasing the
+        // caller — and which one wins is a race. Asserting the bool made this flaky: it passed locally and
+        // failed on CI. Assert the actual guarantee instead: a stuck crawl must not hang the request.
         using var h = new Harness(
             new OnDemandResolutionOptions { CrawlTimeout = TimeSpan.FromMilliseconds(300) },
             SearchWaitMode.WaitForComplete);
         await h.StartAsync();
         h.Crawler.Gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var resolved = await h.Resolver.EnsureResolvedAsync("Tatort", TestContext.Current.CancellationToken);
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        await h.Resolver.EnsureResolvedAsync("Tatort", TestContext.Current.CancellationToken);
+        stopwatch.Stop();
 
-        resolved.ShouldBeFalse(); // released by the ceiling rather than hanging
+        // Generous, because the point is "bounded", not "fast" — a hang would blow straight past this.
+        stopwatch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(10));
     }
 
     [Fact]
