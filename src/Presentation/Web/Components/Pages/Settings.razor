@@ -1,0 +1,424 @@
+@page "/settings"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject IServiceScopeFactory Scopes
+@using Krautwatch.Application.Settings
+@using Krautwatch.Domain.Enums
+
+<PageTitle>Settings · Krautwatch</PageTitle>
+
+<h1>Settings</h1>
+
+@* ── Sonarr / Radarr instances ─────────────────────────────── *@
+<section class="panel">
+    <h2>Sonarr / Radarr instances</h2>
+    <p class="muted small">
+        Krautwatch calls these to verify connectivity, and optionally to pre-warm the crawl list
+        (<a href="https://github.com/Chrison-dev/Krautwatch/issues/6">#6</a>). Searching and downloading work
+        without any instance configured.
+    </p>
+
+    @if (_instances is null)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else if (_instances.Count == 0)
+    {
+        <p class="muted">No instances configured.</p>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th><th>Type</th><th>Base URL</th><th>API key</th>
+                    <th>Last test</th><th class="right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var i in _instances)
+                {
+                    <tr class="@(i.Enabled ? "" : "disabled")">
+                        <td>@i.Name</td>
+                        <td>@i.Kind</td>
+                        <td class="path small">@i.BaseUrl</td>
+                        <td class="small muted">@i.ApiKeyMasked</td>
+                        <td class="small">
+                            @if (i.LastTestOk == true)
+                            {
+                                <span class="ok">✓ @i.LastTestMessage</span>
+                            }
+                            else if (i.LastTestOk == false)
+                            {
+                                <span class="error">✕ @i.LastTestMessage</span>
+                            }
+                            else
+                            {
+                                <span class="muted">never tested</span>
+                            }
+                        </td>
+                        <td class="right actions">
+                            <button class="icon-btn" title="Test connection"
+                                    disabled="@(_testing == i.Id)" @onclick="() => TestAsync(i.Id)">
+                                @(_testing == i.Id ? "…" : "Test")
+                            </button>
+                            <button class="icon-btn" title="Edit" @onclick="() => Edit(i)">Edit</button>
+                            <button class="icon-btn" title="Remove" @onclick="() => DeleteAsync(i.Id)">✕</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @if (_editing is null)
+    {
+        <button class="primary narrow" @onclick="AddNew">+ Add instance</button>
+    }
+    else
+    {
+        <div class="subform">
+            <h3>@(_editing.Id is null ? "Add instance" : "Edit instance")</h3>
+
+            <label>
+                Name
+                <input @bind="_editing.Name" placeholder="Sonarr" />
+            </label>
+
+            <label>
+                Type
+                <select @bind="_editing.Kind">
+                    @foreach (var kind in Enum.GetValues<ArrKind>())
+                    {
+                        <option value="@kind">@kind</option>
+                    }
+                </select>
+            </label>
+
+            <label>
+                Base URL
+                <input @bind="_editing.BaseUrl" placeholder="http://sonarr:8989" />
+            </label>
+
+            <label>
+                API key
+                <input @bind="_editing.ApiKey" type="password"
+                       placeholder="@(_editing.Id is null ? "" : "leave blank to keep the current key")" />
+            </label>
+
+            <label class="checkbox">
+                <input type="checkbox" @bind="_editing.Enabled" />
+                Enabled
+            </label>
+
+            @if (_instanceErrors.Count > 0)
+            {
+                <ul class="error" role="alert">
+                    @foreach (var e in _instanceErrors)
+                    {
+                        <li>@e</li>
+                    }
+                </ul>
+            }
+            @if (_instanceNotice is not null)
+            {
+                <p class="@(_instanceNoticeOk ? "ok" : "error")" role="status">@_instanceNotice</p>
+            }
+
+            <div class="actions">
+                <button class="primary narrow" @onclick="SaveInstanceAsync">Save</button>
+                <button class="icon-btn" @onclick="TestDraftAsync" disabled="@_testingDraft">
+                    @(_testingDraft ? "Testing…" : "Test without saving")
+                </button>
+                <button class="icon-btn" @onclick="CancelEdit">Cancel</button>
+            </div>
+        </div>
+    }
+</section>
+
+@* ── Search ────────────────────────────────────────────────── *@
+<section class="panel">
+    <h2>Search</h2>
+    <p class="muted small">
+        When Sonarr searches for a show nothing has crawled yet, Krautwatch resolves it live against the
+        broadcasters. How the first search behaves is up to you.
+    </p>
+
+    @if (_settings is not null)
+    {
+        <label class="radio">
+            <input type="radio" name="waitmode" checked="@(_waitMode == SearchWaitMode.ReturnFast)"
+                   @onchange="() => _waitMode = SearchWaitMode.ReturnFast" />
+            <span>
+                <strong>Return results fast</strong>
+                <span class="muted small">
+                    Answer quickly with whatever resolved so far and keep crawling in the background. The
+                    first search may under-report; the next one is complete and instant.
+                </span>
+            </span>
+        </label>
+
+        <label class="radio">
+            <input type="radio" name="waitmode" checked="@(_waitMode == SearchWaitMode.WaitForComplete)"
+                   @onchange="() => _waitMode = SearchWaitMode.WaitForComplete" />
+            <span>
+                <strong>Wait for complete result on first query</strong>
+                <span class="muted small">
+                    Might take a while. If a search exceeds Sonarr's own indexer timeout, Sonarr may treat
+                    Krautwatch as failing even though it is working.
+                </span>
+            </span>
+        </label>
+
+        @if (_waitMode == SearchWaitMode.ReturnFast)
+        {
+            <details class="advanced">
+                <summary class="muted small">Advanced</summary>
+                <label>
+                    Wait before answering (seconds)
+                    <input type="number" min="1" max="300" @bind="_waitSeconds" />
+                </label>
+            </details>
+        }
+    }
+</section>
+
+@* ── Downloads ─────────────────────────────────────────────── *@
+<section class="panel">
+    <h2>Downloads</h2>
+
+    @if (_settings is null)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else
+    {
+        <label>
+            Download directory
+            <input @bind="_downloadDirectory" />
+        </label>
+
+        <label>
+            Parallel downloads
+            <input type="number" min="1" max="16" @bind="_maxConcurrent" />
+            <span class="muted small">
+                Not honoured yet — downloads currently run one at a time
+                (<a href="https://github.com/Chrison-dev/Krautwatch/issues/51">#51</a>).
+            </span>
+        </label>
+
+        <label>
+            Catalog refresh interval (hours)
+            <input type="number" min="1" max="168" @bind="_refreshHours" />
+        </label>
+    }
+</section>
+
+@if (_settingsErrors.Count > 0)
+{
+    <ul class="error" role="alert">
+        @foreach (var e in _settingsErrors)
+        {
+            <li>@e</li>
+        }
+    </ul>
+}
+@if (_settingsNotice is not null)
+{
+    <p class="ok" role="status">@_settingsNotice</p>
+}
+
+<button class="primary narrow" @onclick="SaveSettingsAsync">Save settings</button>
+
+@code {
+    IReadOnlyList<ArrInstanceResponse>? _instances;
+    SettingsResponse? _settings;
+
+    // Instance editor
+    InstanceDraft? _editing;
+    readonly List<string> _instanceErrors = [];
+    string? _instanceNotice;
+    bool _instanceNoticeOk;
+    Guid? _testing;
+    bool _testingDraft;
+
+    // Settings form — bound separately so a failed validation doesn't lose the user's edits.
+    string _downloadDirectory = "";
+    int _maxConcurrent;
+    int _refreshHours;
+    SearchWaitMode _waitMode;
+    int _waitSeconds;
+    readonly List<string> _settingsErrors = [];
+    string? _settingsNotice;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadInstancesAsync();
+        await LoadSettingsAsync();
+    }
+
+    async Task LoadInstancesAsync()
+    {
+        using var scope = Scopes.CreateScope();
+        _instances = await scope.ServiceProvider
+            .GetRequiredService<GetArrInstancesHandler>().HandleAsync();
+    }
+
+    async Task LoadSettingsAsync()
+    {
+        using var scope = Scopes.CreateScope();
+        _settings = await scope.ServiceProvider.GetRequiredService<GetSettingsHandler>().HandleAsync();
+
+        _downloadDirectory = _settings.DownloadDirectory;
+        _maxConcurrent = _settings.MaxConcurrentDownloads;
+        _refreshHours = _settings.CatalogRefreshIntervalHours;
+        _waitMode = _settings.SearchWaitMode;
+        _waitSeconds = _settings.SearchWaitSeconds;
+    }
+
+    void AddNew()
+    {
+        _instanceErrors.Clear();
+        _instanceNotice = null;
+        _editing = new InstanceDraft();
+    }
+
+    void Edit(ArrInstanceResponse i)
+    {
+        _instanceErrors.Clear();
+        _instanceNotice = null;
+        // ApiKey deliberately left blank: the real key is never sent to the browser, and blank means
+        // "unchanged" on save.
+        _editing = new InstanceDraft
+        {
+            Id = i.Id, Name = i.Name, Kind = i.Kind, BaseUrl = i.BaseUrl, Enabled = i.Enabled,
+        };
+    }
+
+    void CancelEdit()
+    {
+        _editing = null;
+        _instanceErrors.Clear();
+        _instanceNotice = null;
+    }
+
+    async Task SaveInstanceAsync()
+    {
+        if (_editing is null) return;
+        _instanceErrors.Clear();
+        _instanceNotice = null;
+
+        var request = _editing.ToRequest();
+        var validation = new SaveArrInstanceRequestValidator().Validate(request);
+        if (!validation.IsValid)
+        {
+            _instanceErrors.AddRange(validation.Errors.Select(e => e.ErrorMessage));
+            return;
+        }
+
+        using var scope = Scopes.CreateScope();
+        var saved = await scope.ServiceProvider
+            .GetRequiredService<SaveArrInstanceHandler>().HandleAsync(request);
+
+        if (saved is null)
+        {
+            _instanceErrors.Add("That instance no longer exists.");
+            return;
+        }
+
+        _editing = null;
+        await LoadInstancesAsync();
+    }
+
+    async Task DeleteAsync(Guid id)
+    {
+        using var scope = Scopes.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<DeleteArrInstanceHandler>().HandleAsync(id);
+        if (_editing?.Id == id) _editing = null;
+        await LoadInstancesAsync();
+    }
+
+    async Task TestAsync(Guid id)
+    {
+        _testing = id;
+        try
+        {
+            using var scope = Scopes.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<TestArrConnectionHandler>().HandleAsync(id);
+            await LoadInstancesAsync(); // the outcome is cached on the row
+        }
+        finally
+        {
+            _testing = null;
+        }
+    }
+
+    async Task TestDraftAsync()
+    {
+        if (_editing is null) return;
+        _instanceErrors.Clear();
+        _instanceNotice = null;
+
+        // Testing unsaved details means a wrong key never has to be persisted to discover it is wrong.
+        // Requires an explicit key, since the stored one is never sent to the browser.
+        if (string.IsNullOrWhiteSpace(_editing.ApiKey))
+        {
+            _instanceErrors.Add("Enter the API key to test without saving.");
+            return;
+        }
+
+        _testingDraft = true;
+        try
+        {
+            using var scope = Scopes.CreateScope();
+            var result = await scope.ServiceProvider
+                .GetRequiredService<TestArrConnectionHandler>()
+                .HandleAsync(_editing.ToEntity());
+
+            _instanceNoticeOk = result.Ok;
+            _instanceNotice = result.Ok ? $"✓ {result.Message}" : $"✕ {result.Message}";
+        }
+        finally
+        {
+            _testingDraft = false;
+        }
+    }
+
+    async Task SaveSettingsAsync()
+    {
+        _settingsErrors.Clear();
+        _settingsNotice = null;
+
+        var request = new SaveSettingsRequest(
+            _downloadDirectory, _maxConcurrent, _refreshHours, _waitMode, _waitSeconds);
+
+        var validation = new SaveSettingsRequestValidator().Validate(request);
+        if (!validation.IsValid)
+        {
+            _settingsErrors.AddRange(validation.Errors.Select(e => e.ErrorMessage));
+            return;
+        }
+
+        using var scope = Scopes.CreateScope();
+        _settings = await scope.ServiceProvider
+            .GetRequiredService<SaveSettingsHandler>().HandleAsync(request);
+        _settingsNotice = "Settings saved.";
+    }
+
+    sealed class InstanceDraft
+    {
+        public Guid? Id { get; set; }
+        public string Name { get; set; } = "";
+        public ArrKind Kind { get; set; } = ArrKind.Sonarr;
+        public string BaseUrl { get; set; } = "";
+        public string? ApiKey { get; set; }
+        public bool Enabled { get; set; } = true;
+
+        public SaveArrInstanceRequest ToRequest() => new(Id, Name, Kind, BaseUrl, ApiKey, Enabled);
+
+        public Krautwatch.Domain.Entities.ArrInstance ToEntity() => new()
+        {
+            Name = Name, Kind = Kind, BaseUrl = BaseUrl.Trim().TrimEnd('/'), ApiKey = ApiKey ?? "",
+        };
+    }
+}
