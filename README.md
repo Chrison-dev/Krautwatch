@@ -153,6 +153,42 @@ Indexing:OnDemandResolution:MaxConcurrentResolutions  # default 2 — politeness
 The RSS feed (no query) is never resolved — it serves the standing crawl list, since RSS-Sync polls
 constantly with no particular target.
 
+### TheTVDB matching (optional but strongly recommended)
+
+Sonarr identifies a series by its **TVDB id**, and its episode search always sends `season=` and `ep=`.
+German public-TV titles rarely survive that: Sonarr stores *Die Biene Maja* as **"Maya the Bee"**, our ARD
+feed calls *Extra 3* `extra 3 · Der Irrsinn der Woche`, and most Mediathek assets carry an air date but no
+episode number at all. Krautwatch closes the gap by resolving the id Sonarr sends against TheTVDB and
+matching it back onto the catalog — which also yields the season/episode numbers needed to emit
+`Show.S2026E17.GERMAN.1080p.WEB.h264` instead of an unmatchable date.
+
+Get a free key from [TheTVDB's API key dashboard](https://www.thetvdb.com/dashboard/account/apikey)
+(a subscriber PIN is optional). Supply it either way:
+
+```bash
+# Development — stays out of the repo
+dotnet user-secrets set "TvdbConfiguration:ApiKey" <key> --project src/Presentation/Api/NewznabIndexerApi
+dotnet user-secrets set "TvdbConfiguration:ApiKey" <key> --project src/Presentation/Web
+
+# Production — environment variables (note the double underscore)
+TvdbConfiguration__ApiKey=<key>
+TvdbConfiguration__Pin=<pin>        # optional, subscribers only
+```
+
+Or paste it into **Settings → TheTVDB** in the UI, which stores it in the database instead.
+
+**Configuration wins over the stored value.** An operator who sets `TvdbConfiguration__ApiKey` in a compose
+file expects it to apply, so when it is present the settings page shows the key as managed by configuration
+and read-only — being silently overridden by a stale row from an earlier UI edit is a bad afternoon.
+
+**Without a key nothing breaks, it just matches worse:** every TVDB call returns nothing, releases are
+emitted without a `tvdbid` attribute, and Sonarr falls back to parsing our titles. A TVDB outage behaves the
+same way, deliberately — Sonarr disables an indexer that keeps erroring, so a third-party outage must never
+cost you the indexer.
+
+> The key is stored in plain text today, like the `*arr` instance keys — see issue #60 for encrypting
+> secrets at rest.
+
 ### Downloads
 
 `Download:Directory` sets the output path (the dev fleet points it at a temp dir; in production it's

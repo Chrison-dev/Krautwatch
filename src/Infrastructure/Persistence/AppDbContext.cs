@@ -17,6 +17,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AdminAccount> AdminAccounts => Set<AdminAccount>();
     public DbSet<ArrInstance> ArrInstances => Set<ArrInstance>();
     public DbSet<ResolvedQuery> ResolvedQueries => Set<ResolvedQuery>();
+    public DbSet<ShowMapping> ShowMappings => Set<ShowMapping>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -243,6 +244,36 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .HasMaxLength(20);
 
             e.HasIndex(x => x.BaseUrl).IsUnique();
+        });
+
+        // --------------------------------------------------------
+        // ShowMapping — our show ↔ TheTVDB series id (PR 3a).
+        // Composite key, because the relationship is many-of-ours to one TVDB id: three of our shows are
+        // really tvdb 255986 (extra 3 on ARD plus two ZDF variants). Deliberately its own table and NOT a
+        // column on Show — the crawl upsert marks existing rows Modified and rewrites every column, so a
+        // mapping stored on Show would be wiped by the next crawl.
+        // --------------------------------------------------------
+        modelBuilder.Entity<ShowMapping>(e =>
+        {
+            e.HasKey(x => new { x.TvdbId, x.ShowId });
+            e.Property(x => x.ShowId).HasMaxLength(500);
+            e.Property(x => x.Evidence).HasMaxLength(500);
+
+            e.Property(x => x.Provenance)
+                .HasConversion(v => v.ToString(), v => Enum.Parse<MappingProvenance>(v))
+                .HasMaxLength(20);
+
+            e.HasOne(x => x.Show)
+                .WithMany()
+                .HasForeignKey(x => x.ShowId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // The hot path is "Sonarr asked about this id — which of our shows is it?".
+            e.HasIndex(x => x.TvdbId);
+
+            // A show maps to at most one series: two ids for one show would make the release we emit
+            // ambiguous, and there would be no way to pick between them at query time.
+            e.HasIndex(x => x.ShowId).IsUnique();
         });
 
         // --------------------------------------------------------

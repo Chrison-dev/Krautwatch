@@ -13,6 +13,8 @@ using Krautwatch.Infrastructure.Persistence;
 using Krautwatch.Infrastructure.Proxies;
 using Krautwatch.Infrastructure.Settings;
 using Krautwatch.Infrastructure.System;
+using Krautwatch.Infrastructure.Tvdb;
+using Tvdb.Abstractions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -63,6 +65,7 @@ public static class InfrastructureServiceExtensions
         // Auth — local credential store + password hashing behind Domain ports (#48).
         services.AddScoped<IArrInstanceRepository, ArrInstanceRepository>();
         services.AddScoped<IResolvedQueryRepository, ResolvedQueryRepository>();
+        services.AddScoped<IShowMappingRepository, ShowMappingRepository>();
         services.AddScoped<ILocalCredentialStore, LocalCredentialStore>();
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
 
@@ -149,6 +152,47 @@ public static class InfrastructureServiceExtensions
             // long for that.
             http.Timeout = TimeSpan.FromSeconds(10);
         });
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the TheTVDB read adapter (<see cref="ITvdbCatalog"/>) over the first-party
+    /// <c>TvdbClient</c> package. Safe to call with no API key configured — every call then returns
+    /// nothing and matching degrades to titles, rather than failing.
+    /// </summary>
+    public static IServiceCollection AddTvdbCatalog(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var configuredKey = configuration["TvdbConfiguration:ApiKey"];
+        var configuredPin = configuration["TvdbConfiguration:Pin"];
+
+        services.AddSingleton(sp => new TvdbApiKeySource(
+            sp.GetRequiredService<IServiceScopeFactory>(),
+            sp.GetRequiredService<ILogger<TvdbApiKeySource>>(),
+            configuredKey,
+            configuredPin));
+
+        // Registered *before* AddTvdbClient: the library uses TryAddSingleton for its own provider, so
+        // ours wins and the key can be resolved per call rather than fixed at first options read.
+        services.AddSingleton<ITokenProvider, DynamicKeyTokenProvider>();
+        services.AddHttpClient(nameof(DynamicKeyTokenProvider));
+        services.AddMemoryCache();
+
+        // AddTvdbClient calls GetRequiredSection("TvdbConfiguration"), which throws when the section is
+        // absent — the normal state for an install that has not configured TVDB. Layering the real
+        // configuration over defaults guarantees the section exists while letting real values win.
+        var withDefaults = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["TvdbConfiguration:BaseUrl"] = "https://api4.thetvdb.com/v4",
+                ["TvdbConfiguration:ApiKey"] = string.Empty,
+            })
+            .AddConfiguration(configuration)
+            .Build();
+
+        services.AddTvdbClient(withDefaults);
+        services.AddScoped<ITvdbCatalog, TvdbCatalog>();
         return services;
     }
 

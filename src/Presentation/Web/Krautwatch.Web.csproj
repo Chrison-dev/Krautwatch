@@ -1,4 +1,10 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <!-- Holds the TheTVDB API key in development so it stays out of the repo. Production injects
+         TvdbConfiguration__ApiKey as an environment variable instead. -->
+    <UserSecretsId>cf5c4310-4a7a-4978-94bd-612641415b12</UserSecretsId>
+  </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\Application\Krautwatch.Application.csproj" />

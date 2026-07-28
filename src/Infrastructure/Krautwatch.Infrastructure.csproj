@@ -16,7 +16,14 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.Extensions.Identity.Core" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
     <PackageReference Include="SharpCompress" />
+  </ItemGroup>
+
+  <ItemGroup Label="TheTVDB — the ITvdbCatalog adapter (Chrison-dev/TvdbApi)">
+    <PackageReference Include="TvdbClient" />
+    <PackageReference Include="TvdbClient.Abstractions" />
+    <PackageReference Include="TvdbClient.Models" />
   </ItemGroup>
 
   <ItemGroup Label="Messaging — dispatch adapter for the IMessageDispatcher port (DR-009 §5)">

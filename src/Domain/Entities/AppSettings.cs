@@ -25,4 +25,17 @@ public class AppSettings
     /// ignored entirely in <see cref="Enums.SearchWaitMode.WaitForComplete"/> mode.
     /// </summary>
     public int SearchWaitSeconds { get; set; } = 8;
+
+    /// <summary>
+    /// TheTVDB API key, when the operator supplied one through the settings UI rather than configuration.
+    /// </summary>
+    /// <remarks>
+    /// Configuration (<c>TvdbConfiguration:ApiKey</c> — environment variable or user-secrets) takes
+    /// precedence over this: an operator who sets an env var in a compose file expects it to apply, and
+    /// being silently overridden by a stale row from an earlier UI edit is a bad debugging experience. This
+    /// exists so a plain install can be configured entirely from the UI.
+    ///
+    /// Stored in plain text today, like the *arr instance keys — see #60 for encrypting secrets at rest.
+    /// </remarks>
+    public string? TvdbApiKey { get; set; }
 }

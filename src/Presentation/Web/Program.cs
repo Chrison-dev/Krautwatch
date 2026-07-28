@@ -39,6 +39,10 @@ builder.Services.AddApplication();
 builder.Services.AddArrClient();
 builder.Services.AddScoped<TestArrConnectionHandler>();
 
+// TheTVDB (PR 3a) — the settings page reports whether a key is configured and where it came from, so this
+// host needs the key source even though it does no matching itself.
+builder.Services.AddTvdbCatalog(builder.Configuration);
+
 // ──────────────────────────────────────────────────────────────
 // Authentication (#48)
 //
