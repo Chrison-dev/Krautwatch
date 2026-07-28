@@ -22,7 +22,10 @@ public record SearchReleasesQuery(
 /// <c>resolver</c> is optional, so a host that only reads the catalog needs no broadcaster clients wired in.
 /// When it is absent the behaviour is exactly the pre-#58 read-only search.
 /// </remarks>
-public class SearchReleasesHandler(IEpisodeRepository episodes, OnDemandResolver? resolver = null)
+public class SearchReleasesHandler(
+    IEpisodeRepository episodes,
+    OnDemandResolver? resolver = null,
+    TvdbShowResolver? tvdbResolver = null)
 {
     public async Task<IReadOnlyList<Release>> HandleAsync(SearchReleasesQuery query, CancellationToken ct = default)
     {
@@ -31,6 +34,17 @@ public class SearchReleasesHandler(IEpisodeRepository episodes, OnDemandResolver
         // A TVDB id is the unambiguous question, so answer it directly when Sonarr asks it.
         if (query.TvdbId is not null)
         {
+            // Resolve the id against TVDB and match backwards into our catalog. This is also where the
+            // season/episode numbers come from — Sonarr always sends season=/ep=, and most Mediathek assets
+            // carry only an air date, so without this a correctly mapped show still answers with nothing.
+            if (tvdbResolver is not null)
+            {
+                var resolved = await tvdbResolver.ResolveAsync(query.TvdbId.Value, ct);
+                var numbered = Project(resolved.Episodes, query, limit);
+                if (numbered.Count > 0)
+                    return numbered;
+            }
+
             var byId = Project(await episodes.GetByTvdbIdAsync(query.TvdbId.Value, ct), query, limit);
             if (byId.Count > 0)
                 return byId;
@@ -71,5 +85,35 @@ public class SearchReleasesHandler(IEpisodeRepository episodes, OnDemandResolver
             filtered = filtered.Where(e => e.EpisodeNumber == query.Episode);
 
         return filtered.Take(limit).Select(ReleaseMapper.ToRelease).ToList();
+    }
+
+    /// <summary>
+    /// Projects TVDB-resolved episodes, filtering on <b>TVDB's</b> numbering rather than the broadcaster's.
+    /// </summary>
+    /// <remarks>
+    /// Sonarr asks in TVDB's terms, and the two disagree: measured on real KiKA data, our <c>S01/E27</c> is
+    /// TVDB's <c>S2E1</c>. Filtering on our own numbers would miss the episode Sonarr asked for and,
+    /// worse, occasionally return a different one under the requested number.
+    /// </remarks>
+    private static List<Release> Project(
+        IReadOnlyList<NumberedEpisode> found,
+        SearchReleasesQuery query,
+        int limit)
+    {
+        IEnumerable<NumberedEpisode> filtered = found;
+        if (query.Season is not null)
+            filtered = filtered.Where(e => e.Season == query.Season);
+        if (query.Episode is not null)
+            filtered = filtered.Where(e => e.Number == query.Episode);
+
+        return filtered
+            .Take(limit)
+            .Select(numbered => ReleaseMapper.ToRelease(numbered.Episode) with
+            {
+                TvdbId = numbered.TvdbId,
+                Season = numbered.Season,
+                Episode = numbered.Number,
+            })
+            .ToList();
     }
 }

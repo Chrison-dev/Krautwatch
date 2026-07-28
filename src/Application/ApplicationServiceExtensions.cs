@@ -79,4 +79,21 @@ public static class ApplicationServiceExtensions
         services.AddHostedService<OnDemandResolutionService>();
         return services;
     }
+
+    /// <summary>
+    /// Enables TVDB-id matching (PR 3a): resolve the id Sonarr sends, match it onto our catalog, and derive
+    /// the season/episode numbering its searches require.
+    /// </summary>
+    /// <remarks>
+    /// Call only from a host that also calls <c>AddTvdbCatalog</c>. Registering this unconditionally would
+    /// break DI validate-on-build in every host without an <c>ITvdbCatalog</c> — the same mistake already
+    /// made once with the `*arr` client, so the two are paired deliberately rather than folded into
+    /// <c>AddApplication</c>. <see cref="SearchReleasesHandler"/> takes the resolver as an optional
+    /// parameter, so a host that skips this keeps the pre-PR-3a behaviour exactly.
+    /// </remarks>
+    public static IServiceCollection AddTvdbMatching(this IServiceCollection services)
+    {
+        services.AddScoped<TvdbShowResolver>();
+        return services;
+    }
 }

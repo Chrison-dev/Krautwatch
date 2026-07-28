@@ -50,10 +50,17 @@ public static partial class ReleaseNaming
 {
     private const string QualityTag = "GERMAN.1080p.WEB.h264";
 
+    /// <remarks>
+    /// Having numbers decides the shape, <b>not</b> our own <see cref="SeriesType"/>. That field is a
+    /// crawler guess and it guesses wrong: heute-show, extra 3 and ZDF Magazin Royale are all
+    /// <see cref="SeriesType.Daily"/> to us but <c>standard</c> to TVDB and Sonarr, so keying off it emitted
+    /// air-date titles that Sonarr rejected with "Unable to identify correct episode(s)". Numbers now only
+    /// ever arrive from TVDB — the same source Sonarr matches against — so their presence is the signal.
+    /// </remarks>
     public static string Build(string showTitle, SeriesType type, int? season, int? episode, DateTimeOffset publishDate)
     {
         var name = Slug(showTitle);
-        return type == SeriesType.Standard && season is not null && episode is not null
+        return season is not null && episode is not null
             ? $"{name}.S{season.Value:D2}E{episode.Value:D2}.{QualityTag}"
             : $"{name}.{publishDate:yyyy-MM-dd}.{QualityTag}";
     }
