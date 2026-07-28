@@ -35,7 +35,9 @@ public static class ApplicationServiceExtensions
         // Settings
         services.AddScoped<GetSettingsHandler>();
         services.AddScoped<SaveSettingsHandler>();
-        services.AddScoped<TestArrConnectionHandler>();
+        // NB: TestArrConnectionHandler is registered by the Web host only — it needs IArrClient, which
+        // only a host that calls AddArrClient() provides. Registering it here made every host fail to
+        // start under DI validate-on-build (i.e. in Development).
 
         // Auth (#48) — SetupToken is a singleton so it survives for the process lifetime and is
         // logged once at startup; the handlers are scoped like every other use-case.
