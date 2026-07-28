@@ -21,6 +21,13 @@ public record Release
     public required string DownloadToken { get; init; }
     public required string ShowTitle { get; init; }
     public required SeriesType SeriesType { get; init; }
+
+    /// <summary>
+    /// The show's TVDB id, when we have mapped one. Emitted as a <c>newznab:attr</c> so Sonarr can identify
+    /// the series by id instead of parsing our title string — which is the difference between reliable
+    /// matching and hoping a Mediathek title parses.
+    /// </summary>
+    public int? TvdbId { get; init; }
     public int? Season { get; init; }
     public int? Episode { get; init; }
     public DateTimeOffset PublishDate { get; init; }

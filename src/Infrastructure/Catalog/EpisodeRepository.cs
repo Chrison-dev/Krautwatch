@@ -14,6 +14,15 @@ public class EpisodeRepository(AppDbContext db) : IEpisodeRepository
             .Include(e => e.Streams)
             .FirstOrDefaultAsync(e => e.Id == id, ct);
 
+    public async Task<IReadOnlyList<Episode>> GetByTvdbIdAsync(int tvdbId, CancellationToken ct = default) =>
+        await db.Episodes
+            .Include(e => e.Show).ThenInclude(s => s.Channel)
+            .Include(e => e.Streams)
+            .Where(e => e.Show.TvdbId == tvdbId)
+            .OrderByDescending(e => e.BroadcastDate)
+            .Take(200)
+            .ToListAsync(ct);
+
     public async Task<IReadOnlyList<Episode>> SearchAsync(string query, CancellationToken ct = default)
     {
         var lower = query.ToLower();

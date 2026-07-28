@@ -26,6 +26,7 @@ public static class NewznabEndpoints
         string? q,
         int? season,
         int? ep,
+        int? tvdbid,
         string? apikey,
         int? limit,
         CancellationToken ct)
@@ -39,7 +40,8 @@ public static class NewznabEndpoints
             case "tvsearch":
                 if (!ApiKeyGuard.IsAuthorized(config, apikey)) return Denied();
 
-                var releases = await search.HandleAsync(new SearchReleasesQuery(q, season, ep, limit ?? 100), ct);
+                var releases = await search.HandleAsync(
+                    new SearchReleasesQuery(q, season, ep, limit ?? 100, tvdbid), ct);
 
                 var baseUrl = $"{http.Request.Scheme}://{http.Request.Host}";
                 var key = ApiKeyGuard.Configured(config);

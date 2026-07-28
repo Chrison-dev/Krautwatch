@@ -39,6 +39,12 @@ public interface IEpisodeRepository
     Task<IReadOnlyList<Episode>> SearchAsync(string query, CancellationToken ct = default);
     // Newest episodes first — the Newznab RSS feed (no query) reads from here.
     Task<IReadOnlyList<Episode>> GetRecentAsync(int limit, CancellationToken ct = default);
+
+    /// <summary>
+    /// Episodes of shows mapped to a TVDB id. This is the reliable lookup: Sonarr asks by id, so we answer
+    /// by id rather than re-parsing titles.
+    /// </summary>
+    Task<IReadOnlyList<Episode>> GetByTvdbIdAsync(int tvdbId, CancellationToken ct = default);
     Task<IReadOnlyList<Episode>> GetByChannelAsync(string channelId, ContentType? contentType = null, CancellationToken ct = default);
     Task<IReadOnlyList<Episode>> GetByShowAsync(string showId, CancellationToken ct = default);
     Task<IReadOnlyList<Episode>> GetByContentTypeAsync(ContentType contentType, string? channelId = null, CancellationToken ct = default);

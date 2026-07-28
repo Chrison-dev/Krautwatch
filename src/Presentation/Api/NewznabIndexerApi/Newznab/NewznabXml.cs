@@ -24,7 +24,10 @@ public static class NewznabXml
             new XElement("limits", new XAttribute("max", "500"), new XAttribute("default", "100")),
             new XElement("searching",
                 new XElement("search", new XAttribute("available", "yes"), new XAttribute("supportedParams", "q")),
-                new XElement("tv-search", new XAttribute("available", "yes"), new XAttribute("supportedParams", "q,season,ep")),
+                new XElement("tv-search", new XAttribute("available", "yes"),
+                    // Sonarr reads caps and only sends what we advertise, so tvdbid has to be listed
+                    // here or it will keep falling back to title-only searches.
+                    new XAttribute("supportedParams", "q,tvdbid,season,ep")),
                 new XElement("movie-search", new XAttribute("available", "no"), new XAttribute("supportedParams", "q"))),
             new XElement("categories",
                 new XElement("category",
@@ -56,6 +59,8 @@ public static class NewznabXml
             Attr("category", r.Category),
             Attr("size", r.Size));
 
+        // The one attribute that lets Sonarr skip title parsing entirely.
+        if (r.TvdbId is not null) item.Add(Attr("tvdbid", r.TvdbId.Value));
         if (r.Season is not null) item.Add(Attr("season", r.Season.Value));
         if (r.Episode is not null) item.Add(Attr("episode", r.Episode.Value));
         return item;

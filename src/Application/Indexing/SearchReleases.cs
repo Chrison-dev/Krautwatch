@@ -7,7 +7,12 @@ namespace Krautwatch.Application.Indexing;
 /// A Newznab search (t=search / t=tvsearch) or, when <see cref="Q"/> is empty, the RSS feed of the
 /// most recent releases. Optional season/episode narrow a Standard-series query.
 /// </summary>
-public record SearchReleasesQuery(string? Q = null, int? Season = null, int? Episode = null, int Limit = 100);
+public record SearchReleasesQuery(
+    string? Q = null,
+    int? Season = null,
+    int? Episode = null,
+    int Limit = 100,
+    int? TvdbId = null);
 
 /// <summary>
 /// Serves Newznab results from the catalog, resolving against the broadcasters on demand when a search term
@@ -22,6 +27,19 @@ public class SearchReleasesHandler(IEpisodeRepository episodes, OnDemandResolver
     public async Task<IReadOnlyList<Release>> HandleAsync(SearchReleasesQuery query, CancellationToken ct = default)
     {
         var limit = Math.Clamp(query.Limit, 1, 500);
+
+        // A TVDB id is the unambiguous question, so answer it directly when Sonarr asks it.
+        if (query.TvdbId is not null)
+        {
+            var byId = Project(await episodes.GetByTvdbIdAsync(query.TvdbId.Value, ct), query, limit);
+            if (byId.Count > 0)
+                return byId;
+
+            // The id is one we have not mapped yet. Fall through to the title search when Sonarr also sent
+            // one, rather than reporting "nothing exists" — an unmapped show is our gap, not an absent show.
+            if (string.IsNullOrWhiteSpace(query.Q))
+                return byId;
+        }
 
         // RSS (no query) is never resolved: RSS-Sync polls constantly with no particular target, so
         // resolving here would mean crawling on a timer for nothing specific. Per DR-011 it serves the
