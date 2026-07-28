@@ -25,6 +25,7 @@ builder.Services.AddApplication();
 // supplies the episode numbering its mandatory season/ep parameters need. Optional: with no API key
 // configured every call returns nothing and matching falls back to titles.
 builder.Services.AddTvdbCatalog(builder.Configuration);
+builder.Services.AddTvdbMatching();
 
 // Query-driven search (#58 / DR-011). Sonarr searching for a show no crawler has visited must not get an
 // empty feed, so this host resolves against the broadcasters on demand — which means it needs the crawler

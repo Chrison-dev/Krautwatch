@@ -32,6 +32,31 @@ public class ReleaseNamingTests
         var title = ReleaseNaming.Build("extra 3", SeriesType.Standard, null, null, Air);
         title.ShouldBe("extra.3.2026-07-10.GERMAN.1080p.WEB.h264");
     }
+
+    [Fact]
+    public void Numbering_decides_the_shape_even_when_we_think_the_show_is_daily()
+    {
+        // Measured against a real Sonarr: heute-show, extra 3 and ZDF Magazin Royale are all Daily to our
+        // crawler but `standard` to TVDB and Sonarr. Keying the shape off our own SeriesType emitted an
+        // air-date title that Sonarr rejected — "Unable to identify correct episode(s) using release name
+        // and scene mappings". Numbers only ever come from TVDB now, so their presence is the signal.
+        var title = ReleaseNaming.Build("heute-show", SeriesType.Daily, 2026, 17, Air);
+        title.ShouldBe("heute-show.S2026E17.GERMAN.1080p.WEB.h264");
+    }
+
+    [Fact]
+    public void A_year_season_is_not_truncated_to_two_digits()
+    {
+        // D2 is a *minimum* width; a 2026 season has to survive intact or the title names a different season.
+        ReleaseNaming.Build("x", SeriesType.Standard, 2026, 5, Air).ShouldContain("S2026E05");
+    }
+
+    [Fact]
+    public void A_half_known_number_is_not_enough()
+    {
+        ReleaseNaming.Build("x", SeriesType.Standard, 2026, null, Air)
+            .ShouldEndWith("2026-07-10.GERMAN.1080p.WEB.h264");
+    }
 }
 
 public class SearchReleasesHandlerTests
