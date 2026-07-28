@@ -53,6 +53,30 @@ public interface IEpisodeRepository
     Task UpsertManyAsync(IEnumerable<Episode> episodes, CancellationToken ct = default);
 }
 
+/// <summary>
+/// Persistence for show↔TVDB-id mappings. Separate from the crawl graph on purpose — see
+/// <see cref="ShowMapping"/> for why writing these onto <c>Show</c> would not survive a re-crawl.
+/// </summary>
+public interface IShowMappingRepository
+{
+    /// <summary>Our shows mapped to a TVDB id, best-trusted first. Empty when the id is unmapped.</summary>
+    Task<IReadOnlyList<ShowMapping>> GetByTvdbIdAsync(int tvdbId, CancellationToken ct = default);
+
+    /// <summary>Every mapping for one of our shows — a show can legitimately carry only one.</summary>
+    Task<ShowMapping?> GetByShowIdAsync(string showId, CancellationToken ct = default);
+
+    Task<IReadOnlyList<ShowMapping>> GetAllAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Records a mapping, upgrading an existing one in place. An <see cref="MappingProvenance.OperatorConfirmed"/>
+    /// mapping is never downgraded by a weaker automatic result — the override exists because the automatic
+    /// answer was wrong. Returns the mapping as stored, which may be the pre-existing pinned one.
+    /// </summary>
+    Task<ShowMapping> UpsertAsync(ShowMapping mapping, CancellationToken ct = default);
+
+    Task DeleteAsync(int tvdbId, string showId, CancellationToken ct = default);
+}
+
 /// <summary>Tracks which search terms have already been resolved against the broadcasters (#58).</summary>
 public interface IResolvedQueryRepository
 {

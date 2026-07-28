@@ -144,6 +144,165 @@ The bridge, and where the effort really goes.
   let the operator pick the broadcaster show manually. Manual mappings win over auto ones.
 - Once mapped, crawled episodes inherit `Show.TvdbId`, which is what makes PR 1's attribute meaningful.
 
+## Revision after the live test ride against real Sonarr (2026-07-28)
+
+Ran the real thing: Sonarr 4.0.19 (legacy instance, 192.168.179.153) → Krautwatch as a Newznab
+indexer on the LAN, five German public-TV series added (`heute-show` 234791, `Extra 3` 255986,
+*Maya the Bee* 73518 **and** 266275, `ZDF Magazin Royale` 390284).
+
+**Result: no release was matchable.** Sonarr's verdict on every one of ours was
+`Unable to identify correct episode(s) using release name and scene mappings`. The test ride replaced
+several assumptions with measurements.
+
+### What the wire actually shows
+
+An **episode-level** interactive search makes Sonarr issue four queries — including the id-based one,
+which vindicates PR 1:
+
+```
+q=Heute Show          &season=2026&ep=17
+q=heute show DE       &season=2026&ep=17
+q=Heute Show Spezial  &season=2026&ep=17
+tvdbid=234791         &season=2026&ep=17
+```
+
+Note `?seriesId=` alone (no `seasonNumber`) is **not** representative — it sends
+`t=tvsearch&cat=5000` with no search terms at all, so we answer with the recent feed and every series
+looks identical. Do not benchmark with it.
+
+### Sonarr always sends `season` + `ep`, and we have neither
+
+Of 23 crawled shows, only *Die Biene Maja* carries episode numbers (48/48). `heute-show` (28),
+`extra 3` (15), `ZDF Magazin Royale` (16) and the rest are **date-only** — `SeasonNumber` and
+`EpisodeNumber` are null. So `tvdbid=234791&season=2026&ep=17` returns **0 items even once the show
+is mapped**. Show-level mapping alone cannot make this work.
+
+TVDB models `heute-show` with **year-seasons**, and `S2026E17` carries `airDate=2026-06-05` — exactly
+our `BroadcastDate`. **An air-date join onto TVDB's episode list is the fix, and it is the piece
+MediathekArr exists to solve.** Answering the original question honestly: for *episode numbering* we
+do have to mimic them. Only the show-level trick was avoidable.
+
+### Release naming follows TVDB, not our own `SeriesType`
+
+`ReleaseNaming.Build` emits `SxxEyy` only when `SeriesType == Standard && season != null && episode != null`,
+else an air date. Our crawler guesses the type and guesses wrong: `heute-show`, `ZDF Magazin Royale`
+and `extra 3` are all **`Daily`** for us but **`standard`** on TVDB/Sonarr. So populating the numbers
+is necessary but not sufficient — the naming branch must key off *having TVDB numbers*, treating our
+own `SeriesType` as the unreliable heuristic it is.
+
+### Enrichment cannot live on the crawled rows
+
+`EpisodeRepository.UpsertBatchAsync` sets pre-existing entities to `EntityState.Modified`, so a
+re-crawl writes **every** column from freshly-built crawler entities. Anything we stamp onto
+`Show.TvdbId` or `Episode.SeasonNumber` is therefore **wiped on the next crawl**.
+
+→ Mappings live in **their own tables**, never touched by the crawl path. This is immune by
+construction rather than by remembering to preserve columns, and it also gives us provenance
+(auto vs. operator-confirmed) and the many-to-one case for free: `extra 3` exists **three times** in
+our catalog (`extra 3 · Der Irrsinn der Woche` on ARD, plus `extra 3` and
+`extra 3 Spezial: Der reale Irrsinn` on ZDF), so several of our shows legitimately map to one TVDB id.
+
+### `country=deu` is the real trick — Wikidata is demoted
+
+TVDB's own search filter does the disambiguation job better than post-hoc Wikidata corroboration.
+Measured, `country=deu` stripped the foreign noise in every ambiguous case without ever removing a
+correct answer:
+
+| Query | plain | `country=deu` |
+|---|---|---|
+| `Das Traumschiff` | ZDF, then **Star Trek** ×2 | ZDF only |
+| `extra 3` | NDR, then PBS | NDR only |
+| `heute-show` | ZDF, then a Chinese drama + NBC | ZDF only |
+| `Der Tatortreiniger` | NDR, then BBC *The Cleaner* | NDR only |
+| `Panorama` | BBC / VRT / Comedy Central / CNN | one German hit |
+
+Corrections to the research above: TVDB search is **case- and punctuation-insensitive**
+(`extra 3` matches; `heute show` ≡ `heute-show`) — the earlier "case matters" note was a *Wikidata*
+artifact, mis-attributed. Leading articles usually do **not** break it (`Die Biene Maja`,
+`Der Tatortreiniger`, `Die Anstalt`, `Das Traumschiff` all match), so a blanket strip would be wrong;
+but `Die Sendung mit der Maus` returns **nothing** while `Sendung mit der Maus` → **153241 (WDR)**.
+Hence a **fallback ladder** (retry without the leading article on empty), not a normalisation rule.
+`country=deu` cannot split *Die Biene Maja* — both records are ZDF-credited — so name-plus-year
+comparison stays necessary, which is the case that matters for wanting 1975 *and* 2013.
+
+Wikidata keeps only its keyless-fallback role for operators without a TVDB key.
+
+### Also confirmed working
+
+On-demand resolution (DR-011 / #58) earns its keep: `ZDF Magazin Royale` returned 0 on the cold
+query, and Sonarr's own searching warmed the catalog from 3 shows to **23**. Cross-subnet routing and
+the Newznab handshake (`t=caps` → `t=tvsearch`) both work unmodified.
+
+### Revised shape
+
+**PR 3a — show mapping** (`feat/arr-show-mapping`). A `ShowMapping` table (our `ProviderKey` + show
+id → `TvdbId`, with provenance), populated by: TVDB search with `country=deu` + the
+article-drop fallback ladder → name/year scoring → Wikidata keyless fallback → manual override in the
+UI. Reads project the mapped id onto the release; the crawl never writes it.
+
+**PR 3b — episode mapping + naming** (`feat/arr-episode-mapping`). For each mapped show, pull TVDB's
+episode list and join our `BroadcastDate` → (`season`, `episode`) into an `EpisodeMapping` table.
+Make `season`/`ep` search filtering and `SxxEyy` naming read from that, independent of our
+`SeriesType` guess. **3a alone produces nothing grabbable — 3b is what makes the integration real.**
+
+Fix alongside: title-search normalisation, since Sonarr sends `Heute Show` (→ 1 item) where
+`heute-show` yields 28.
+
+## Revision 2 — resolve backwards from Sonarr's id, and learn from the grab (2026-07-28)
+
+Operator direction, and it supersedes the "auto-accept only on exact match, queue the rest for
+confirmation in our UI" approach above: **when auto-matching is uncertain, do not decide — return all
+plausible candidates and let the interactive search be the disambiguation UI.** Remember what the user
+picks and use it as the mapping from then on.
+
+### Match backwards, not forwards
+
+Sonarr's episode query already contains the authoritative `tvdbid`. So the primary direction is
+**`tvdbid` → TVDB record → our catalog**, not our-title → TVDB-search:
+
+1. Resolve `tvdbid` once (cached): canonical name, **German translation + aliases**, year, network,
+   and the **episode list with air dates**.
+2. Match into our catalog on those names, and match episodes on `BroadcastDate` → (`season`, `ep`).
+3. This single fetch answers *both* open problems — show identity **and** the numbering needed for
+   `SxxEyy` naming. 3a and 3b stop being sequential.
+
+TVDB *search* (with `country=deu` + the article-drop ladder) is still needed, but only for the
+**title-only** path: `q=` with no id, our own Web UI, Prowlarr title probes, and bulk pre-warming.
+It is no longer on the critical path for Sonarr.
+
+### Ambiguity → candidates → learned mapping
+
+When several of our shows plausibly satisfy one `tvdbid` (e.g. the three `extra 3` variants), emit a
+release **per candidate**, each:
+
+- tagged with the `tvdbid` Sonarr asked for, so Sonarr accepts rather than rejects it;
+- carrying a **distinct `DownloadToken`** that encodes (our show, that `tvdbid`);
+- titled so a human can tell them apart (broadcaster / our show title visible).
+
+Sonarr dedups on GUID, so distinct tokens are required regardless — the learning signal rides along
+for free. **The grab is the confirmation:** the SABnzbd `addurl` carries the token, the token names the
+candidate, and we persist `ShowMapping(our show ↔ tvdbid)`. Subsequent searches skip the fan-out.
+
+Cap the candidate count (≈3) so the interactive list stays readable.
+
+### The one real hazard: we cannot tell interactive from automatic
+
+Newznab has no flag distinguishing an interactive search from a scheduled/RSS one — both are
+`t=tvsearch`. So an **automatic** search can grab an arbitrary candidate by its own quality/priority
+scoring and teach us a mapping no human ever approved.
+
+Mitigations (all three, none sufficient alone):
+
+- **Rank candidates deterministically** (best-scoring first) so an unattended grab takes the most
+  likely one rather than an arbitrary one.
+- **Record provenance** — `Learned` (from a grab) is distinct from `OperatorConfirmed` (set in our UI)
+  and from `Auto` (unambiguous match). Only `OperatorConfirmed` is never revised automatically.
+- **Surface mappings in the settings UI** so a wrong learned mapping is visible and correctable —
+  the recovery path, since a wrong `tvdbid` files episodes under the wrong series silently.
+
+Do **not** auto-map on a low-confidence single candidate just because it is the only one; absence of
+alternatives is not evidence.
+
 ## Decisions
 
 **PR 1 goes first, and is useful alone.** It improves matching for the shows we already crawl without
