@@ -16,6 +16,7 @@ public static partial class ReleaseMapper
     [MapProperty(nameof(Episode.Id), nameof(Release.DownloadToken))]
     [MapProperty([nameof(Episode.Show), nameof(Show.Title)], [nameof(Release.ShowTitle)])]
     [MapProperty([nameof(Episode.Show), nameof(Show.SeriesType)], [nameof(Release.SeriesType)])]
+    [MapProperty([nameof(Episode.Show), nameof(Show.TvdbId)], [nameof(Release.TvdbId)])]
     [MapProperty(nameof(Episode.SeasonNumber), nameof(Release.Season))]
     [MapProperty(nameof(Episode.EpisodeNumber), nameof(Release.Episode))]
     [MapProperty(nameof(Episode.BroadcastDate), nameof(Release.PublishDate))]
