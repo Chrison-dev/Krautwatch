@@ -1,6 +1,7 @@
 using System.Threading.RateLimiting;
 using Krautwatch.Application;
 using Krautwatch.Application.Auth;
+using Krautwatch.Application.Settings;
 using Krautwatch.Infrastructure;
 using Krautwatch.Web;
 using Krautwatch.Web.Components;
@@ -13,6 +14,14 @@ using Microsoft.AspNetCore.RateLimiting;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+
+// Load the static-web-assets manifest explicitly. The framework only does this in Development, and none of
+// our hosts run as Development (there are no launch profiles, and Aspire does not set one), so
+// _framework/blazor.web.js returned a 500 and compressed assets returned an empty 200 — the UI loaded
+// unstyled and completely inert, with no error anywhere obvious. No-op when the manifest is absent, i.e. in
+// a published app where the assets are copied into wwwroot. See #63.
+builder.WebHost.UseStaticWebAssets();
+
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 var connectionString = builder.Configuration.GetConnectionString("krautwatch")
@@ -24,6 +33,11 @@ builder.Services.AddInfrastructure(new DbProviderOptions
     ConnectionString = connectionString,
 });
 builder.Services.AddApplication();
+
+// Outbound Sonarr/Radarr client + the Action that uses it. Paired deliberately: the handler cannot be
+// constructed without the client, so whichever host wants one must wire both (#4).
+builder.Services.AddArrClient();
+builder.Services.AddScoped<TestArrConnectionHandler>();
 
 // ──────────────────────────────────────────────────────────────
 // Authentication (#48)
