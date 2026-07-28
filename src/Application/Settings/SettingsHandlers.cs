@@ -15,14 +15,18 @@ public record SettingsResponse(
     int CatalogRefreshIntervalHours,
     string CatalogProviderKey,
     SearchWaitMode SearchWaitMode,
-    int SearchWaitSeconds);
+    int SearchWaitSeconds,
+    string TvdbApiKeyMasked,
+    bool TvdbKeyFromConfiguration);
 
 public record SaveSettingsRequest(
     string DownloadDirectory,
     int MaxConcurrentDownloads,
     int CatalogRefreshIntervalHours,
     SearchWaitMode SearchWaitMode = SearchWaitMode.ReturnFast,
-    int SearchWaitSeconds = 8);
+    int SearchWaitSeconds = 8,
+    /// <summary>Blank means "leave unchanged"; the UI never receives the real key back to echo.</summary>
+    string? TvdbApiKey = null);
 
 // ──────────────────────────────────────────────────────────────
 // Validator
@@ -49,6 +53,9 @@ public class SaveSettingsRequestValidator : AbstractValidator<SaveSettingsReques
         RuleFor(x => x.SearchWaitSeconds)
             .InclusiveBetween(1, 300)
             .WithMessage("Search wait must be between 1 and 300 seconds.");
+
+        RuleFor(x => x.TvdbApiKey)
+            .MaximumLength(200).WithMessage("TVDB API key must be 200 characters or fewer.");
     }
 }
 
@@ -56,16 +63,20 @@ public class SaveSettingsRequestValidator : AbstractValidator<SaveSettingsReques
 // Handlers
 // ──────────────────────────────────────────────────────────────
 
-public class GetSettingsHandler(ISettingsRepository repository)
+/// <remarks>
+/// <c>tvdb</c> is optional so a host that does no TVDB matching needs no adapter wired in; without it the
+/// page simply reports TVDB as unconfigured.
+/// </remarks>
+public class GetSettingsHandler(ISettingsRepository repository, ITvdbCatalog? tvdb = null)
 {
     public async Task<SettingsResponse> HandleAsync(CancellationToken ct = default)
     {
         var settings = await repository.GetAsync(ct);
-        return SettingsMapper.ToResponse(settings);
+        return SettingsMapper.ToResponse(settings, tvdb);
     }
 }
 
-public class SaveSettingsHandler(ISettingsRepository repository)
+public class SaveSettingsHandler(ISettingsRepository repository, ITvdbCatalog? tvdb = null)
 {
     public async Task<SettingsResponse> HandleAsync(
         SaveSettingsRequest request,
@@ -79,18 +90,29 @@ public class SaveSettingsHandler(ISettingsRepository repository)
         settings.SearchWaitMode             = request.SearchWaitMode;
         settings.SearchWaitSeconds          = request.SearchWaitSeconds;
 
+        // Blank means unchanged — the read model only ever exposes a masked key, so the UI cannot echo the
+        // real one back and a blank field must not wipe a configured credential.
+        if (!string.IsNullOrWhiteSpace(request.TvdbApiKey))
+            settings.TvdbApiKey = request.TvdbApiKey.Trim();
+
         await repository.SaveAsync(settings, ct);
-        return SettingsMapper.ToResponse(settings);
+        return SettingsMapper.ToResponse(settings, tvdb);
     }
 }
 
 file static class SettingsMapper
 {
-    public static SettingsResponse ToResponse(AppSettings s) => new(
+    public static SettingsResponse ToResponse(AppSettings s, ITvdbCatalog? tvdb) => new(
         DownloadDirectory:           s.DownloadDirectory,
         MaxConcurrentDownloads:      s.MaxConcurrentDownloads,
         CatalogRefreshIntervalHours: s.CatalogRefreshIntervalHours,
         CatalogProviderKey:          s.CatalogProviderKey,
         SearchWaitMode:              s.SearchWaitMode,
-        SearchWaitSeconds:           s.SearchWaitSeconds);
+        SearchWaitSeconds:           s.SearchWaitSeconds,
+        // Never the real key. When configuration supplies it we do not even have the value here — say so
+        // rather than masking an empty string and implying none is set.
+        TvdbApiKeyMasked:            tvdb?.IsKeyFromConfiguration == true
+                                         ? "set by configuration"
+                                         : ArrInstanceMapper.Mask(s.TvdbApiKey),
+        TvdbKeyFromConfiguration:    tvdb?.IsKeyFromConfiguration ?? false);
 }

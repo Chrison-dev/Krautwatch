@@ -21,6 +21,13 @@ public interface ITvdbCatalog
     /// <summary>True when a usable API key is configured. False means every call here returns nothing.</summary>
     bool IsConfigured { get; }
 
+    /// <summary>
+    /// True when the key came from configuration (environment variable / user-secrets) rather than the
+    /// database. Configuration wins, so the settings UI shows the key as managed elsewhere and read-only —
+    /// letting the UI appear to change a value that config will keep overriding is worse than saying so.
+    /// </summary>
+    bool IsKeyFromConfiguration { get; }
+
     /// <summary>The series record for an id, including the German translation and aliases, or null.</summary>
     Task<TvdbSeries?> GetSeriesAsync(int tvdbId, CancellationToken ct = default);
 

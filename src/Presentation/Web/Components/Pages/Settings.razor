@@ -183,6 +183,61 @@
     }
 </section>
 
+@* ── TheTVDB ───────────────────────────────────────────────── *@
+<section class="panel">
+    <h2>TheTVDB</h2>
+
+    @if (_settings is null)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else
+    {
+        <p class="muted small">
+            Lets Sonarr match by id instead of parsing our titles, and supplies the season/episode numbers
+            its searches require. Optional — without a key, matching falls back to titles and gets worse,
+            but nothing breaks.
+            <a href="https://www.thetvdb.com/dashboard/account/apikey" target="_blank" rel="noopener">
+                Get a key
+            </a>.
+        </p>
+
+        @if (_settings.TvdbKeyFromConfiguration)
+        {
+            @* Configuration wins, so offering an editable field here would be a lie — the saved value
+               would never take effect while the environment variable is set. *@
+            <p class="ok small">
+                A key is set by configuration (<code>TvdbConfiguration__ApiKey</code>). It takes precedence
+                over anything entered here, so this field is disabled.
+            </p>
+            <label>
+                API key
+                <input value="set by configuration" disabled />
+            </label>
+        }
+        else
+        {
+            <label>
+                API key
+                <input type="password" placeholder="@TvdbKeyPlaceholder" @bind="_tvdbApiKey"
+                       autocomplete="off" />
+                <span class="muted small">
+                    @if (string.IsNullOrEmpty(_settings.TvdbApiKeyMasked))
+                    {
+                        <text>No key configured — TVDB matching is inactive.</text>
+                    }
+                    else
+                    {
+                        <text>
+                            Currently @_settings.TvdbApiKeyMasked. Leave blank to keep it unchanged.
+                        </text>
+                    }
+                </span>
+            </label>
+        }
+    }
+</section>
+
 @* ── Downloads ─────────────────────────────────────────────── *@
 <section class="panel">
     <h2>Downloads</h2>
@@ -248,8 +303,14 @@
     int _refreshHours;
     SearchWaitMode _waitMode;
     int _waitSeconds;
+    string _tvdbApiKey = "";
     readonly List<string> _settingsErrors = [];
     string? _settingsNotice;
+
+    // Mirrors the *arr instance keys: blank means "unchanged", because the page only ever receives a
+    // masked key and so cannot echo the real one back.
+    string TvdbKeyPlaceholder =>
+        string.IsNullOrEmpty(_settings?.TvdbApiKeyMasked) ? "Paste your TVDB API key" : "Unchanged";
 
     protected override async Task OnInitializedAsync()
     {
@@ -274,6 +335,7 @@
         _refreshHours = _settings.CatalogRefreshIntervalHours;
         _waitMode = _settings.SearchWaitMode;
         _waitSeconds = _settings.SearchWaitSeconds;
+        _tvdbApiKey = "";   // never pre-fill a credential field
     }
 
     void AddNew()
@@ -390,7 +452,7 @@
         _settingsNotice = null;
 
         var request = new SaveSettingsRequest(
-            _downloadDirectory, _maxConcurrent, _refreshHours, _waitMode, _waitSeconds);
+            _downloadDirectory, _maxConcurrent, _refreshHours, _waitMode, _waitSeconds, _tvdbApiKey);
 
         var validation = new SaveSettingsRequestValidator().Validate(request);
         if (!validation.IsValid)
@@ -402,6 +464,7 @@
         using var scope = Scopes.CreateScope();
         _settings = await scope.ServiceProvider
             .GetRequiredService<SaveSettingsHandler>().HandleAsync(request);
+        _tvdbApiKey = "";   // clear the credential field so it is not resubmitted on the next save
         _settingsNotice = "Settings saved.";
     }
 

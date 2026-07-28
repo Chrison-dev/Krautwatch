@@ -55,7 +55,14 @@
     <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.10" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+  </ItemGroup>
+
+  <ItemGroup Label="TheTVDB — first-party client (Chrison-dev/TvdbApi), used rather than hand-rolled">
+    <PackageVersion Include="TvdbClient"              Version="4.7.12" />
+    <PackageVersion Include="TvdbClient.Abstractions" Version="4.7.12" />
+    <PackageVersion Include="TvdbClient.Models"       Version="4.7.12" />
   </ItemGroup>
 
   <ItemGroup Label="Compression">
