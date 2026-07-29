@@ -103,10 +103,11 @@ public class TvdbShowResolverTests
     }
 
     [Fact]
-    public async Task Several_corroborated_shows_are_all_offered_and_none_is_persisted()
+    public async Task Several_corroborated_shows_are_all_offered_and_recorded_as_undecided_candidates()
     {
-        // The operator's design: do not guess, let the interactive search disambiguate and learn from the
-        // grab. Persisting a guess here would defeat that, and a wrong id is worse than no id.
+        // Do not guess: offer them all and let repeated grabs decide. Each is persisted with a zero pick
+        // count so the question is visibly open — recording only the grabbed one would leave a single mapping
+        // behind and make the next search treat one grab as settled.
         Configured();
         _tvdb.GetSeriesAsync(255986, Arg.Any<CancellationToken>())
             .Returns(new TvdbSeries(255986, "Extra 3", 2006, "Norddeutscher Rundfunk (NDR)", []));
@@ -126,7 +127,13 @@ public class TvdbShowResolverTests
 
         result.Outcome.ShouldBe(ResolutionOutcome.Candidates);
         result.Episodes.Select(e => e.Episode.ShowId).Distinct().Count().ShouldBe(2);
-        await _mappings.DidNotReceive().UpsertAsync(Arg.Any<ShowMapping>(), Arg.Any<CancellationToken>());
+
+        // Recorded, but with no picks and no claim to be the answer.
+        await _mappings.Received(2).UpsertAsync(
+            Arg.Is<ShowMapping>(m => m != null
+                                  && m.PickCount == 0
+                                  && m.Provenance == MappingProvenance.Learned),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]

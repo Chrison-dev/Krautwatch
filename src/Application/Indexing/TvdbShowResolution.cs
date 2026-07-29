@@ -24,6 +24,12 @@ public enum ResolutionOutcome
     /// <summary>Answered from a mapping we had already stored.</summary>
     AlreadyMapped = 0,
 
+    /// <summary>
+    /// An id that used to be ambiguous is now settled: one show has been grabbed often enough that we chose
+    /// it instead of asking again.
+    /// </summary>
+    Settled = 5,
+
     /// <summary>Exactly one of our shows corroborated, so it was mapped automatically.</summary>
     AutoMapped = 1,
 
@@ -79,6 +85,18 @@ public class TvdbShowResolver(
     public const int MaxCandidates = 3;
 
     /// <summary>
+    /// How many grabs of the same show, for the same TVDB id, before we stop asking and pick it ourselves.
+    /// </summary>
+    /// <remarks>
+    /// A repeated choice is evidence; a single one is not. Newznab cannot tell an interactive search from a
+    /// scheduled one, so one grab may have had no human behind it — but five grabs of the same show, when
+    /// alternatives were on offer every time, is a decision. Until the threshold is reached the candidates
+    /// are still offered, just ordered with the most-picked first, so the answer keeps getting easier to
+    /// give.
+    /// </remarks>
+    public const int AutoSelectAfterPicks = 5;
+
+    /// <summary>
     /// How many ranked shows are worth the corroboration round trip. Ranking is cheap and in-memory, but
     /// each check needs that show's episodes from the database.
     /// </summary>
@@ -88,9 +106,19 @@ public class TvdbShowResolver(
     {
         var stored = await mappings.GetByTvdbIdAsync(tvdbId, ct);
         if (stored.Count > 0)
+        {
+            var decided = Decide(stored);
+            var outcome = (stored.Count, decided.Count) switch
+            {
+                (> 1, 1) => ResolutionOutcome.Settled,     // repeated picks resolved a former ambiguity
+                (_, > 1) => ResolutionOutcome.Candidates,  // still open; offered most-picked first
+                _ => ResolutionOutcome.AlreadyMapped,
+            };
+
             return new ResolutionResult(
-                ResolutionOutcome.AlreadyMapped,
-                await NumberAsync(tvdbId, stored.Select(m => m.ShowId), ct));
+                outcome,
+                await NumberAsync(tvdbId, decided.Select(m => m.ShowId), ct));
+        }
 
         if (!tvdb.IsConfigured)
             return ResolutionResult.Unavailable;
@@ -154,8 +182,7 @@ public class TvdbShowResolver(
                 Number(tvdbId, corroboration, ourEpisodes));
         }
 
-        // Several plausible shows: offer them all and let the grab decide. Nothing is persisted here — a
-        // mapping learned from an actual selection is worth more than one guessed from a ranking.
+        // Several plausible shows: offer them all and let repeated grabs decide.
         if (corroborated.Count > MaxCandidates)
         {
             logger.LogInformation(
@@ -169,6 +196,25 @@ public class TvdbShowResolver(
             tvdbId, series.Name, offered.Count,
             string.Join(", ", offered.Select(o => o.Candidate.Show.Id)));
 
+        // Persist every candidate with a zero pick count. Recording only the show that gets grabbed would
+        // leave a single mapping behind on the first pick, and the next search would treat that lone row as
+        // settled — auto-selecting after one grab and discarding the whole point of counting. Writing all
+        // candidates keeps the question visibly open until one of them earns the answer, and gives the
+        // settings UI something to show meanwhile.
+        foreach (var (candidate, corroboration, _) in offered)
+        {
+            await mappings.UpsertAsync(
+                new ShowMapping
+                {
+                    TvdbId = tvdbId,
+                    ShowId = candidate.Show.Id,
+                    Provenance = MappingProvenance.Learned,
+                    Evidence = $"candidate — {candidate.Evidence}; "
+                             + $"{corroboration.Matched}/{corroboration.Comparable} episodes corroborated",
+                },
+                ct);
+        }
+
         return new ResolutionResult(
             ResolutionOutcome.Candidates,
             offered.SelectMany(o => Number(tvdbId, o.Corroboration, o.OurEpisodes)).ToList());
@@ -179,6 +225,34 @@ public class TvdbShowResolver(
         ShowCandidate Candidate,
         CorroborationResult Corroboration,
         IReadOnlyList<Episode> OurEpisodes);
+
+    /// <summary>
+    /// Narrows stored mappings to the one we should answer with, or returns them all when the question is
+    /// still open.
+    /// </summary>
+    /// <remarks>
+    /// The precedence is deliberate. An operator override is final. Otherwise a show that has been grabbed
+    /// <see cref="AutoSelectAfterPicks"/> times for this id has earned the decision, and we stop making the
+    /// operator repeat themselves. Below that, everything stays on offer — but ordered most-picked first, so
+    /// the accumulating evidence also makes each subsequent pick easier.
+    /// </remarks>
+    private static List<ShowMapping> Decide(IReadOnlyList<ShowMapping> stored)
+    {
+        if (stored.FirstOrDefault(m => m.IsPinned) is { } pinned)
+            return [pinned];
+
+        var ranked = stored
+            .OrderByDescending(m => m.PickCount)
+            .ThenBy(m => m.ShowId, StringComparer.Ordinal)
+            .ToList();
+
+        // A tie on picks is not a decision, however high the count — two shows grabbed equally often means
+        // the operator has been choosing both, and picking one for them would be inventing an answer.
+        var best = ranked[0];
+        var tied = ranked.Count > 1 && ranked[1].PickCount == best.PickCount;
+
+        return best.PickCount >= AutoSelectAfterPicks && !tied ? [best] : ranked;
+    }
 
     /// <summary>Numbers the episodes of already-mapped shows.</summary>
     private async Task<IReadOnlyList<NumberedEpisode>> NumberAsync(

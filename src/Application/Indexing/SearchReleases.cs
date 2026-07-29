@@ -1,5 +1,6 @@
 using Krautwatch.Domain.Entities;
 using Krautwatch.Domain.Interfaces;
+using Krautwatch.Domain.ValueObjects;
 
 namespace Krautwatch.Application.Indexing;
 
@@ -113,6 +114,9 @@ public class SearchReleasesHandler(
                 TvdbId = numbered.TvdbId,
                 Season = numbered.Season,
                 Episode = numbered.Number,
+                // Carry the id through the grab, so picking this release tells us which of the candidate
+                // shows answers this TVDB id. The GUID stays the bare episode id — Sonarr dedups on it.
+                DownloadToken = new ReleaseToken(numbered.Episode.Id, numbered.TvdbId).Encode(),
             })
             .ToList();
     }

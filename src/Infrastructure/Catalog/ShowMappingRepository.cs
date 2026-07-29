@@ -15,12 +15,17 @@ public class ShowMappingRepository(AppDbContext db) : IShowMappingRepository
     /// Ordered strongest-provenance first, then oldest. An unattended grab takes the first candidate, so
     /// the ordering must be deterministic and must favour evidence we trust more.
     /// </remarks>
+    /// <remarks>
+    /// Ordered so the most-trusted candidate comes first: an operator override, then the most-grabbed show,
+    /// then oldest. An unattended grab takes the first release offered, so this ordering has to be both
+    /// deterministic and aligned with the evidence.
+    /// </remarks>
     public async Task<IReadOnlyList<ShowMapping>> GetByTvdbIdAsync(int tvdbId, CancellationToken ct = default) =>
         await db.ShowMappings
             .Include(m => m.Show)
             .Where(m => m.TvdbId == tvdbId)
             .OrderByDescending(m => m.Provenance == MappingProvenance.OperatorConfirmed)
-            .ThenByDescending(m => m.Provenance == MappingProvenance.Learned)
+            .ThenByDescending(m => m.PickCount)
             .ThenBy(m => m.CreatedAt)
             .ThenBy(m => m.ShowId)
             .ToListAsync(ct);
@@ -71,6 +76,45 @@ public class ShowMappingRepository(AppDbContext db) : IShowMappingRepository
         existing.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         return existing;
+    }
+
+    public async Task<int> RecordPickAsync(int tvdbId, string showId, CancellationToken ct = default)
+    {
+        // Increment in the database rather than read-modify-write. Sonarr grabs a whole season in a burst, so
+        // concurrent picks of the same show are normal and would otherwise overwrite each other's counts.
+        var updated = await db.ShowMappings
+            .Where(m => m.TvdbId == tvdbId && m.ShowId == showId)
+            .ExecuteUpdateAsync(
+                set => set
+                    .SetProperty(m => m.PickCount, m => m.PickCount + 1)
+                    .SetProperty(m => m.LastPickedAt, DateTimeOffset.UtcNow)
+                    .SetProperty(m => m.UpdatedAt, DateTimeOffset.UtcNow),
+                ct);
+
+        if (updated > 0)
+        {
+            return await db.ShowMappings
+                .Where(m => m.TvdbId == tvdbId && m.ShowId == showId)
+                .Select(m => m.PickCount)
+                .FirstAsync(ct);
+        }
+
+        // First pick for a mapping we never offered as a candidate — e.g. a grab of a release from before
+        // this feature existed, or a token replayed from an old NZB. Record it rather than dropping the
+        // signal; the show is evidently the answer to this id.
+        var created = new ShowMapping
+        {
+            TvdbId = tvdbId,
+            ShowId = showId,
+            Provenance = MappingProvenance.Learned,
+            Evidence = "created by a grab",
+            PickCount = 1,
+            LastPickedAt = DateTimeOffset.UtcNow,
+        };
+
+        db.ShowMappings.Add(created);
+        await db.SaveChangesAsync(ct);
+        return created.PickCount;
     }
 
     public async Task DeleteAsync(int tvdbId, string showId, CancellationToken ct = default)

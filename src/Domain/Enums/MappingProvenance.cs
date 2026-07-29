@@ -15,11 +15,23 @@ public enum MappingProvenance
     Auto = 0,
 
     /// <summary>
-    /// Inferred from a grab. We offered several candidates and something picked one — usually a human in
-    /// Sonarr's interactive search, but Newznab cannot distinguish that from a scheduled search, so this
-    /// is *probable* consent, not confirmed consent. Replaceable, and surfaced in the UI for correction.
+    /// Inferred from grabs. We offered several candidates and something picked this one — usually a human in
+    /// Sonarr's interactive search, but Newznab cannot distinguish that from a scheduled search, so a single
+    /// pick is *probable* consent at best.
     /// </summary>
+    /// <remarks>
+    /// Which is why picks are counted rather than trusted individually: one stray automatic grab moves a
+    /// counter, and only a repeated choice becomes a decision. See
+    /// <c>TvdbShowResolver.AutoSelectAfterPicks</c>.
+    /// </remarks>
     Learned = 1,
+
+    /// <summary>
+    /// Imported from a mapping file — our own export, or a curated third-party set such as RundfunkArr's
+    /// <c>rulesets.json</c>. Someone vouched for it, but not this operator and not against this catalog, so
+    /// it ranks below an explicit local override.
+    /// </summary>
+    Imported = 3,
 
     /// <summary>
     /// Set explicitly by the operator in our own UI. Never revised automatically — an override exists
