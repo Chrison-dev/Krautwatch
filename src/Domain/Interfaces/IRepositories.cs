@@ -74,6 +74,16 @@ public interface IShowMappingRepository
     /// </summary>
     Task<ShowMapping> UpsertAsync(ShowMapping mapping, CancellationToken ct = default);
 
+    /// <summary>
+    /// Records that a release from <paramref name="showId"/> was grabbed in answer to
+    /// <paramref name="tvdbId"/>, creating the mapping if this is the first pick. Returns the new count.
+    /// </summary>
+    /// <remarks>
+    /// Increments in the database rather than read-modify-write: Sonarr can grab a whole season at once, and
+    /// concurrent grabs of the same show would otherwise lose counts to each other.
+    /// </remarks>
+    Task<int> RecordPickAsync(int tvdbId, string showId, CancellationToken ct = default);
+
     Task DeleteAsync(int tvdbId, string showId, CancellationToken ct = default);
 }
 

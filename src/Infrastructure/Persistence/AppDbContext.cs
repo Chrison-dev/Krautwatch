@@ -271,6 +271,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             // The hot path is "Sonarr asked about this id — which of our shows is it?".
             e.HasIndex(x => x.TvdbId);
 
+            // Counts votes from grabs; never null, so an increment needs no null handling.
+            e.Property(x => x.PickCount).HasDefaultValue(0);
+
             // A show maps to at most one series: two ids for one show would make the release we emit
             // ambiguous, and there would be no way to pick between them at query time.
             e.HasIndex(x => x.ShowId).IsUnique();

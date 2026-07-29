@@ -39,6 +39,19 @@ public class ShowMapping
     /// </summary>
     public string? Evidence { get; set; }
 
+    /// <summary>
+    /// How many times a release from this show has been grabbed in answer to this TVDB id.
+    /// </summary>
+    /// <remarks>
+    /// The disambiguation signal. A grab is a deliberate pick out of the candidates we offered, so repeated
+    /// picks are the operator telling us the answer — without them ever visiting a settings page. Counting
+    /// rather than trusting the first pick is what makes this safe: Newznab cannot distinguish an interactive
+    /// search from a scheduled one, so a single grab may have had no human behind it at all.
+    /// </remarks>
+    public int PickCount { get; set; }
+
+    public DateTimeOffset? LastPickedAt { get; set; }
+
     public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 
