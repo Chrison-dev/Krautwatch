@@ -197,8 +197,8 @@ public class CreateAdminRequestValidatorTests
 
     [Theory]
     [InlineData("", "a-long-enough-password")]           // no username
-    [InlineData("admin", "")]                            // no password
-    [InlineData("admin", "short")]                       // under 12 characters
+    [InlineData("admin", "")]                            // no password at all
+    [InlineData("admin", "   ")]                         // whitespace is not a password
     public void Rejects_invalid_input(string username, string password)
     {
         Validator.Validate(new CreateAdminRequest(username, password, password)).IsValid.ShouldBeFalse();
@@ -211,10 +211,24 @@ public class CreateAdminRequestValidatorTests
             .IsValid.ShouldBeFalse();
     }
 
-    [Fact]
-    public void Accepts_a_long_password()
+    [Theory]
+    [InlineData("a-long-enough-password")]
+    [InlineData("short")]
+    [InlineData("x")]
+    [InlineData("1234")]
+    [InlineData("hunter2")]
+    public void Accepts_whatever_password_the_operator_chose(string password)
     {
-        Validator.Validate(new CreateAdminRequest("admin", "a-long-enough-password", "a-long-enough-password"))
-            .IsValid.ShouldBeTrue();
+        // No minimum length and no character-class rules by design: this is a single-admin credential on a
+        // box the operator already controls, and a policy that blocks the password they wanted just moves
+        // it onto a sticky note. Real password policy belongs at an identity provider via Auth:Provider=oidc.
+        Validator.Validate(new CreateAdminRequest("admin", password, password)).IsValid.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Still_bounds_the_length_for_storage()
+    {
+        var tooLong = new string('x', 257);
+        Validator.Validate(new CreateAdminRequest("admin", tooLong, tooLong)).IsValid.ShouldBeFalse();
     }
 }
