@@ -34,11 +34,13 @@ public class CreateAdminRequestValidator : AbstractValidator<CreateAdminRequest>
             .NotEmpty().WithMessage("Username must not be empty.")
             .MaximumLength(100).WithMessage("Username must be 100 characters or fewer.");
 
-        // Length is the property that actually matters; composition rules mostly push people toward
-        // predictable substitutions. Long minimum, no character-class theatre.
+        // No minimum length, and no character-class rules. This is a single-admin credential on a
+        // self-hosted box the operator already controls — Sonarr and Radarr impose nothing either, and a
+        // policy that blocks the password someone actually wanted just moves it onto a sticky note. The
+        // upper bound stays: it is a storage bound, not an opinion. Operators wanting real password policy
+        // should use `Auth:Provider = oidc` and enforce it at the identity provider.
         RuleFor(x => x.Password)
             .NotEmpty().WithMessage("Password must not be empty.")
-            .MinimumLength(12).WithMessage("Password must be at least 12 characters.")
             .MaximumLength(256).WithMessage("Password must be 256 characters or fewer.");
 
         RuleFor(x => x.ConfirmPassword)
