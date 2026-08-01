@@ -64,7 +64,7 @@ public class AddDownloadByTokenHandlerTests
         var jobs = Substitute.For<IDownloadJobRepository>();
         var queue = Substitute.For<IDownloadQueue>();
 
-        var jobId = await new AddDownloadByTokenHandler(episodes, jobs, queue).HandleAsync("zdf:1", TestContext.Current.CancellationToken);
+        var jobId = await new AddDownloadByTokenHandler(episodes, jobs, queue).HandleAsync("zdf:1", ct: TestContext.Current.CancellationToken);
 
         jobId.ShouldNotBeNull();
         await jobs.Received(1).AddAsync(Arg.Is<DownloadJob>(j => j != null && j.EpisodeId == "zdf:1" && j.StreamUrl == "https://cdn/x.mp4"), Arg.Any<CancellationToken>());
@@ -80,7 +80,7 @@ public class AddDownloadByTokenHandlerTests
         var jobs = Substitute.For<IDownloadJobRepository>();
         var queue = Substitute.For<IDownloadQueue>();
 
-        await new AddDownloadByTokenHandler(episodes, jobs, queue).HandleAsync("kika:1", TestContext.Current.CancellationToken);
+        await new AddDownloadByTokenHandler(episodes, jobs, queue).HandleAsync("kika:1", ct: TestContext.Current.CancellationToken);
 
         await jobs.Received(1).AddAsync(Arg.Is<DownloadJob>(j => j != null && j.GeoRestricted), Arg.Any<CancellationToken>());
     }
@@ -93,7 +93,7 @@ public class AddDownloadByTokenHandlerTests
         var jobs = Substitute.For<IDownloadJobRepository>();
         var queue = Substitute.For<IDownloadQueue>();
 
-        var jobId = await new AddDownloadByTokenHandler(episodes, jobs, queue).HandleAsync("nope", TestContext.Current.CancellationToken);
+        var jobId = await new AddDownloadByTokenHandler(episodes, jobs, queue).HandleAsync("nope", ct: TestContext.Current.CancellationToken);
 
         jobId.ShouldBeNull();
         await queue.DidNotReceive().EnqueueAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -110,7 +110,7 @@ public class AddDownloadByTokenHandlerTests
         var jobs = Substitute.For<IDownloadJobRepository>();
         var queue = Substitute.For<IDownloadQueue>();
 
-        var jobId = await new AddDownloadByTokenHandler(episodes, jobs, queue).HandleAsync("zdf:2", TestContext.Current.CancellationToken);
+        var jobId = await new AddDownloadByTokenHandler(episodes, jobs, queue).HandleAsync("zdf:2", ct: TestContext.Current.CancellationToken);
 
         jobId.ShouldBeNull();
         await jobs.DidNotReceive().AddAsync(Arg.Any<DownloadJob>(), Arg.Any<CancellationToken>());

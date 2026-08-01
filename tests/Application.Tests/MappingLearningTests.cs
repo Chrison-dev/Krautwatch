@@ -101,7 +101,7 @@ public class GrabRecordsAPickTests
         HaveEpisode("ard:extra-3:1", "ard:extra-3");
 
         var token = new ReleaseToken("ard:extra-3:1", 255986).Encode();
-        await Handler().HandleAsync(token, TestContext.Current.CancellationToken);
+        await Handler().HandleAsync(token, ct: TestContext.Current.CancellationToken);
 
         await _mappings.Received(1).RecordPickAsync(255986, "ard:extra-3", Arg.Any<CancellationToken>());
     }
@@ -111,7 +111,7 @@ public class GrabRecordsAPickTests
     {
         HaveEpisode("ard:extra-3:1", "ard:extra-3");
 
-        await Handler().HandleAsync("ard:extra-3:1", TestContext.Current.CancellationToken);
+        await Handler().HandleAsync("ard:extra-3:1", ct: TestContext.Current.CancellationToken);
 
         await _mappings.DidNotReceive()
             .RecordPickAsync(Arg.Any<int>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -126,7 +126,7 @@ public class GrabRecordsAPickTests
             .Returns<Task<int>>(_ => throw new InvalidOperationException("database is down"));
 
         var jobId = await Handler().HandleAsync(
-            new ReleaseToken("ard:extra-3:1", 255986).Encode(), TestContext.Current.CancellationToken);
+            new ReleaseToken("ard:extra-3:1", 255986).Encode(), ct: TestContext.Current.CancellationToken);
 
         jobId.ShouldNotBeNull();
         await _queue.Received(1).EnqueueAsync(jobId!.Value, Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -138,7 +138,7 @@ public class GrabRecordsAPickTests
         _episodes.GetByIdAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((Episode?)null);
 
         var jobId = await Handler().HandleAsync(
-            new ReleaseToken("nope", 1).Encode(), TestContext.Current.CancellationToken);
+            new ReleaseToken("nope", 1).Encode(), ct: TestContext.Current.CancellationToken);
 
         jobId.ShouldBeNull();
     }

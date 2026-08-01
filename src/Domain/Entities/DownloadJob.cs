@@ -15,6 +15,18 @@ public class DownloadJob
     public string EpisodeId { get; init; } = default!;
     public Episode? Episode { get; set; }
     public string StreamUrl { get; init; } = default!;
+
+    /// <summary>
+    /// The release title this download was grabbed as, when it came from an <c>*arr</c> app.
+    /// </summary>
+    /// <remarks>
+    /// Null for downloads started from our own UI, which have no release name and want the
+    /// human-readable library layout instead. When set it drives both what the SABnzbd surface reports
+    /// and what the file is called on disk — Sonarr parses the download's name to decide what it is, and
+    /// a German episode title like "heute-show vom 29. Mai 2026" carries no season or episode, so it can
+    /// never be imported.
+    /// </remarks>
+    public string? ReleaseName { get; init; }
     public VideoQuality Quality { get; init; }
 
     /// <summary>

@@ -27,9 +27,25 @@ public sealed class RawMp4DownloadProvider(
     private static readonly HttpClient Direct = CreateClient(null);
     private static readonly ConcurrentDictionary<string, HttpClient> Proxied = new();
 
+    /// <summary>
+    /// How long the stream may deliver nothing before the download is treated as dead.
+    /// </summary>
+    /// <remarks>
+    /// The client timeout is infinite because a total-request deadline would abort a legitimate
+    /// multi-gigabyte download. That leaves the opposite failure: a CDN that stops sending without closing
+    /// the connection, where <c>ReadAsync</c> simply never returns. Observed against ZDF mid-download — the
+    /// job sat at 40% forever, and Sonarr waits on the download client indefinitely, so the whole grab
+    /// silently wedges. An idle deadline is the bound that actually fits: unlimited total time, but data
+    /// has to keep arriving.
+    /// </remarks>
+    private static readonly TimeSpan StallTimeout = TimeSpan.FromSeconds(60);
+
     private static HttpClient CreateClient(string? proxyUrl)
     {
-        var handler = new SocketsHttpHandler();
+        var handler = new SocketsHttpHandler
+        {
+            ConnectTimeout = TimeSpan.FromSeconds(30),
+        };
         if (proxyUrl is not null)
         {
             handler.Proxy = new WebProxy(proxyUrl);
@@ -52,7 +68,7 @@ public sealed class RawMp4DownloadProvider(
         var attempts = await ResolveEgressAsync(job, ct);
 
         var tempPath  = naming.BuildTempPath(outputDirectory, job.Id, job.Quality);
-        var finalPath = naming.BuildFinalPath(outputDirectory, episode, job.Quality);
+        var finalPath = naming.BuildFinalPath(outputDirectory, episode, job.Quality, releaseName: job.ReleaseName);
         Directory.CreateDirectory(Path.GetDirectoryName(finalPath)!);
 
         logger.LogInformation("Downloading {Episode} → {Path}", episode.Title, finalPath);
@@ -71,12 +87,20 @@ public sealed class RawMp4DownloadProvider(
                 var buffer = new byte[81920];
                 long total = 0;
                 int read;
-                while ((read = await source.ReadAsync(buffer, ct)) > 0)
+                while ((read = await ReadWithStallGuardAsync(source, buffer, episode.Title, total, ct)) > 0)
                 {
                     await file.WriteAsync(buffer.AsMemory(0, read), ct);
                     total += read;
                     if (contentLength is > 0)
                         progress.Report(Math.Clamp(total * 100.0 / contentLength.Value, 0, 100));
+                }
+
+                if (contentLength is > 0 && total < contentLength.Value)
+                {
+                    // The stream ended early. Without this the truncated file would be moved into place and
+                    // reported as a success, and Sonarr would import a partial episode.
+                    throw new IOException(
+                        $"Stream ended after {total} of {contentLength.Value} bytes for \"{episode.Title}\".");
                 }
             }
         }
@@ -91,6 +115,36 @@ public sealed class RawMp4DownloadProvider(
         logger.LogInformation("Downloaded {Episode} ({Size} bytes) via {Egress}",
             episode.Title, size, usedProxy ?? "direct");
         return new DownloadResult(finalPath, size);
+    }
+
+    /// <summary>
+    /// One read, bounded by <see cref="StallTimeout"/>.
+    /// </summary>
+    /// <remarks>
+    /// The cancellation is linked so a genuine cancel (an operator removing the download) still propagates
+    /// as <see cref="OperationCanceledException"/>, while an idle stream surfaces as an
+    /// <see cref="IOException"/> the job can fail and Sonarr can retry. Distinguishing the two matters:
+    /// a cancelled job must not be reported as a failed one.
+    /// </remarks>
+    private async Task<int> ReadWithStallGuardAsync(
+        Stream source, byte[] buffer, string episodeTitle, long bytesSoFar, CancellationToken ct)
+    {
+        using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        idle.CancelAfter(StallTimeout);
+
+        try
+        {
+            return await source.ReadAsync(buffer, idle.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            logger.LogWarning(
+                "Download of {Episode} stalled after {Bytes} bytes — no data for {Seconds}s",
+                episodeTitle, bytesSoFar, StallTimeout.TotalSeconds);
+
+            throw new IOException(
+                $"Download stalled: no data for {StallTimeout.TotalSeconds:F0}s after {bytesSoFar} bytes.");
+        }
     }
 
     // The egress candidates to try, in order. Direct ([null]) for an unrestricted job; the proxy

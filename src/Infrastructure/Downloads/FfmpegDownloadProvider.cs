@@ -31,7 +31,7 @@ public sealed class FfmpegDownloadProvider(
         // the best candidate and let it drive its own (proxied) segment fetches; no proxy → fail fast.
         var proxy = await ResolveProxyAsync(job, ct);
 
-        var finalPath = naming.BuildFinalPath(outputDirectory, episode, job.Quality);
+        var finalPath = naming.BuildFinalPath(outputDirectory, episode, job.Quality, "mp4", job.ReleaseName);
         var tempPath = Path.ChangeExtension(naming.BuildTempPath(outputDirectory, job.Id, job.Quality), ".mp4");
         Directory.CreateDirectory(Path.GetDirectoryName(finalPath)!);
 
