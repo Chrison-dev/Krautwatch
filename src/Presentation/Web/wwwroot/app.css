@@ -52,10 +52,31 @@ input {
     border: 1px solid var(--line); border-radius: 8px; color: var(--text); font-size: 15px;
 }
 input:focus { outline: none; border-color: var(--accent); }
+
+/* Textareas inherit the input treatment; without this they render as unstyled white boxes wedged
+   beside their label, since the `input` selectors do not cover them. */
+textarea {
+    display: block; width: 100%; margin-top: 6px; padding: 10px 14px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--text); font-size: 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    resize: vertical; box-sizing: border-box;
+}
+textarea:focus { outline: none; border-color: var(--accent); }
+
 button {
     padding: 10px 18px; background: var(--accent); color: #14161a;
     border: 0; border-radius: 8px; font-weight: 600; cursor: pointer;
 }
+
+/* A link that behaves as a button — used for the mappings export, where a real <a download> beats a
+   scripted click. Matches button metrics so the two line up inside an .actions row. */
+a.button {
+    display: inline-block; padding: 10px 18px; border-radius: 8px;
+    font-weight: 600; text-decoration: none; cursor: pointer;
+    background: var(--accent); color: #14161a;
+}
+a.button.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
+a.button.secondary:hover { border-color: var(--accent); }
 button:disabled { opacity: 0.5; cursor: default; }
 button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
 button.ghost:hover { border-color: var(--accent); }
