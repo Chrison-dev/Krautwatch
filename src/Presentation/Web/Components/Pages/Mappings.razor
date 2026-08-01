@@ -72,10 +72,12 @@
                     </td>
                     <td>@Describe(m.Provenance)</td>
                     <td>
-                        @m.PickCount
+                        <div>@m.PickCount</div>
                         @if (m.PicksUntilSettled is > 0 and var remaining)
                         {
-                            <span class="muted small">(@remaining more settles it)</span>
+                            @* Own line: Razor collapses the whitespace around an @if, so inline this
+                               rendered as "0(5 more settles it)" in a narrow column. *@
+                            <div class="muted small">@remaining more settles it</div>
                         }
                     </td>
                     <td class="actions">
@@ -117,7 +119,7 @@
 
     <label>
         Paste an exported file to import
-        <textarea rows="5" @bind="_importJson" placeholder="[ { &quot;tvdbId&quot;: 234791, … } ]"></textarea>
+        <textarea rows="5" @bind="_importJson" placeholder="the contents of krautwatch-mappings.json"></textarea>
     </label>
     <div class="actions">
         <button class="secondary" @onclick="ImportAsync" disabled="@string.IsNullOrWhiteSpace(_importJson)">
