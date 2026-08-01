@@ -147,5 +147,6 @@ public static class DownloadJobMapper
         StartedAt:       job.StartedAt,
         CompletedAt:     job.CompletedAt,
         Active:          job.IsActive,
-        GeoRestricted:   job.GeoRestricted);
+        GeoRestricted:   job.GeoRestricted,
+        ReleaseName:     job.ReleaseName);
 }

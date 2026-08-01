@@ -47,7 +47,10 @@ public static class NewznabEndpoints
                 var key = ApiKeyGuard.Configured(config);
                 return Xml(NewznabXml.Feed(releases, r =>
                 {
-                    var url = $"{baseUrl}/download?token={Uri.EscapeDataString(r.DownloadToken)}";
+                    // The release name rides along so the NZB, its filename and the file the download
+                    // client writes all carry it — that name is what Sonarr's importer parses.
+                    var url = $"{baseUrl}/download?token={Uri.EscapeDataString(r.DownloadToken)}"
+                            + $"&name={Uri.EscapeDataString(r.Title)}";
                     return key is null ? url : $"{url}&apikey={Uri.EscapeDataString(key)}";
                 }));
 
@@ -56,13 +59,33 @@ public static class NewznabEndpoints
         }
     }
 
-    private static IResult HandleDownload(HttpContext http, IConfiguration config, string? token, string? apikey)
+    /// <remarks>
+    /// <paramref name="name"/> is the release title, echoed into the NZB and its filename. Sonarr names the
+    /// downloaded file after the NZB, so this is what ends up on disk and what its importer parses.
+    /// </remarks>
+    private static IResult HandleDownload(
+        HttpContext http,
+        IConfiguration config,
+        string? token,
+        string? apikey,
+        string? name)
     {
         if (!ApiKeyGuard.IsAuthorized(config, apikey)) return Denied();
         if (string.IsNullOrWhiteSpace(token)) return Results.BadRequest("Missing 'token'.");
 
-        http.Response.Headers.ContentDisposition = "attachment; filename=\"krautwatch.nzb\"";
-        return Results.Content(NewznabXml.Nzb(token), "application/x-nzb");
+        var releaseName = string.IsNullOrWhiteSpace(name) ? "krautwatch" : SanitiseFileName(name);
+
+        http.Response.Headers.ContentDisposition = $"attachment; filename=\"{releaseName}.nzb\"";
+        return Results.Content(NewznabXml.Nzb(token, releaseName), "application/x-nzb");
+    }
+
+    /// <summary>Strips anything that cannot appear in a filename or an HTTP header value.</summary>
+    private static string SanitiseFileName(string name)
+    {
+        var cleaned = new string(name.Where(c =>
+            !Path.GetInvalidFileNameChars().Contains(c) && c is not ('"' or '\\' or '\r' or '\n')).ToArray());
+
+        return cleaned.Trim() is { Length: > 0 } trimmed ? trimmed : "krautwatch";
     }
 
     private static IResult Denied() =>

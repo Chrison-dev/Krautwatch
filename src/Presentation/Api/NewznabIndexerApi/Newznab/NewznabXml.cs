@@ -69,11 +69,43 @@ public static class NewznabXml
     private static XElement Attr(string name, object value) =>
         new(Nz + "attr", new XAttribute("name", name), new XAttribute("value", value));
 
-    /// <summary>A minimal NZB carrying only the download token (SABnzbd decodes it later).</summary>
-    public static string Nzb(string token) =>
-        Doc(new XElement(NzbNs + "nzb",
+    /// <summary>
+    /// A synthetic NZB carrying our download token. The token in <c>head</c> is the payload we actually
+    /// use; the <c>file</c> element below exists solely to satisfy Sonarr.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Sonarr runs <c>NzbValidationService</c> over every NZB <b>before</b> handing it to a download
+    /// client, and rejects one with no <c>file</c> elements — <c>Invalid NZB: No files</c>. A
+    /// token-only NZB therefore fails at the grab, and the download client is never even contacted, which
+    /// presents as the indexer being broken rather than the NZB being unusual.
+    /// </para>
+    /// <para>
+    /// So we emit one placeholder file with a single segment. Nothing ever reads it: we own both ends, and
+    /// our SABnzbd endpoint pulls the real stream from the token. It is inert padding that makes a
+    /// legitimate NZB, and the <c>subject</c> carries the release name so anything inspecting the file by
+    /// hand sees something meaningful.
+    /// </para>
+    /// </remarks>
+    public static string Nzb(string token, string? releaseName = null)
+    {
+        var subject = string.IsNullOrWhiteSpace(releaseName) ? "krautwatch" : releaseName;
+
+        return Doc(new XElement(NzbNs + "nzb",
             new XElement(NzbNs + "head",
-                new XElement(NzbNs + "meta", new XAttribute("type", NzbToken.MetaType), token))));
+                new XElement(NzbNs + "meta", new XAttribute("type", NzbToken.MetaType), token)),
+            new XElement(NzbNs + "file",
+                new XAttribute("poster", "krautwatch@localhost"),
+                new XAttribute("date", DateTimeOffset.UtcNow.ToUnixTimeSeconds()),
+                new XAttribute("subject", $"\"{subject}.mp4\" yEnc (1/1)"),
+                new XElement(NzbNs + "groups",
+                    new XElement(NzbNs + "group", "alt.binaries.krautwatch")),
+                new XElement(NzbNs + "segments",
+                    new XElement(NzbNs + "segment",
+                        new XAttribute("bytes", 1),
+                        new XAttribute("number", 1),
+                        "krautwatch@localhost")))));
+    }
 
     private static string Doc(XElement root) =>
         new XDeclaration("1.0", "UTF-8", null) + Environment.NewLine + root;

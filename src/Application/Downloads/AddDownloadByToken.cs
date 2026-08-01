@@ -22,7 +22,14 @@ public class AddDownloadByTokenHandler(
     IShowMappingRepository? mappings = null,
     ILogger<AddDownloadByTokenHandler>? logger = null)
 {
-    public async Task<Guid?> HandleAsync(string token, CancellationToken ct = default)
+    /// <param name="releaseName">
+    /// The release title the `*arr` app grabbed, when known. Carried onto the job so the download client
+    /// surface and the file on disk both use the name Sonarr expects to parse.
+    /// </param>
+    public async Task<Guid?> HandleAsync(
+        string token,
+        string? releaseName = null,
+        CancellationToken ct = default)
     {
         var parsed = ReleaseToken.Parse(token);
 
@@ -42,6 +49,7 @@ public class AddDownloadByTokenHandler(
             StreamUrl     = stream.Url,
             Quality       = stream.Quality,
             GeoRestricted = episode.GeoRestricted,
+            ReleaseName   = string.IsNullOrWhiteSpace(releaseName) ? null : releaseName.Trim(),
         };
 
         await jobs.AddAsync(job, ct);

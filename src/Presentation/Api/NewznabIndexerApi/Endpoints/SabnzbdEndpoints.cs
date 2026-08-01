@@ -14,6 +14,22 @@ public static class SabnzbdEndpoints
 {
     private const string SabVersion = "4.3.0";
 
+    /// <summary>
+    /// The category list <c>get_config</c> reports, in SABnzbd's own shape.
+    /// </summary>
+    /// <remarks>
+    /// <c>*</c> is SABnzbd's default category and Sonarr expects it to exist; <c>tv</c> and <c>movies</c>
+    /// are what it assigns for series and films. <c>dir</c> is deliberately empty — everything lands in
+    /// the configured download directory, and a per-category subdirectory would only add a path mapping
+    /// for the operator to get wrong.
+    /// </remarks>
+    private static readonly object[] Categories =
+    [
+        new { name = "*",      order = 0, pp = "", script = "None", dir = "", priority = 0 },
+        new { name = "tv",     order = 1, pp = "", script = "None", dir = "", priority = 0 },
+        new { name = "movies", order = 2, pp = "", script = "None", dir = "", priority = 0 },
+    ];
+
     public static IEndpointRouteBuilder MapSabnzbdEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapMethods("/sabnzbd/api", ["GET", "POST"], HandleAsync).WithName("Sabnzbd");
@@ -46,15 +62,22 @@ public static class SabnzbdEndpoints
                     config = new
                     {
                         misc = new { complete_dir = appSettings.DownloadDirectory, version = SabVersion },
-                        categories = new[] { "*", "tv", "movies" },
+                        // Categories are objects, not strings. Sonarr deserialises these into its own
+                        // SabnzbdCategory type and a bare "tv" aborts the whole client test with
+                        // `Error converting value "*" to type SabnzbdCategory` — which reads like a Sonarr
+                        // fault rather than ours, and blocks configuring the download client at all.
+                        categories = Categories,
                     }
                 });
 
             case "addfile":
-                return await AddAsync(add, await ReadTokenFromFileAsync(http, ct), ct);
+                var uploaded = await ReadUploadedNzbAsync(http, ct);
+                return await AddAsync(add, uploaded.Token, uploaded.ReleaseName, ct);
 
             case "addurl":
-                return await AddAsync(add, TokenFromUrl(query["name"]), ct);
+                // Sonarr uses addfile; addurl remains for clients that fetch the NZB themselves, where the
+                // release name rides in the URL we published.
+                return await AddAsync(add, TokenFromUrl(query["name"]), NameFromUrl(query["name"]), ct);
 
             case "queue":
                 if (IsDelete(query))
@@ -77,27 +100,56 @@ public static class SabnzbdEndpoints
     private static bool IsDelete(IQueryCollection query) =>
         string.Equals(query["name"], "delete", StringComparison.OrdinalIgnoreCase);
 
-    private static async Task<IResult> AddAsync(AddDownloadByTokenHandler add, string? token, CancellationToken ct)
+    private static async Task<IResult> AddAsync(
+        AddDownloadByTokenHandler add, string? token, string? releaseName, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(token))
             return Results.Json(new { status = false, error = "No download token." });
 
-        var jobId = await add.HandleAsync(token, ct);
+        var jobId = await add.HandleAsync(token, releaseName, ct);
         return jobId is null
             ? Results.Json(new { status = false, error = "Unknown release." })
             : Results.Json(new { status = true, nzo_ids = new[] { jobId.Value.ToString() } });
     }
 
-    private static async Task<string?> ReadTokenFromFileAsync(HttpContext http, CancellationToken ct)
+    /// <summary>
+    /// Reads the token and release name out of the NZB Sonarr uploads.
+    /// </summary>
+    /// <remarks>
+    /// The release name is taken from the NZB's file subject rather than the upload's filename: Sonarr
+    /// does send <c>&lt;release&gt;.nzb</c>, but the subject is what we control end to end, so it stays
+    /// correct even if a client renames the file.
+    /// </remarks>
+    private static async Task<(string? Token, string? ReleaseName)> ReadUploadedNzbAsync(
+        HttpContext http, CancellationToken ct)
     {
-        if (!http.Request.HasFormContentType) return null;
+        if (!http.Request.HasFormContentType) return (null, null);
         var form = await http.Request.ReadFormAsync(ct);
         var file = form.Files.FirstOrDefault();
-        if (file is null) return null;
+        if (file is null) return (null, null);
 
         await using var stream = file.OpenReadStream();
-        using var reader = new StreamReader(stream);
-        return NzbToken.Read(await reader.ReadToEndAsync(ct));
+        using var buffer = new MemoryStream();
+        await stream.CopyToAsync(buffer, ct);
+
+        buffer.Position = 0;
+        var token = NzbToken.Read(buffer);
+
+        buffer.Position = 0;
+        var releaseName = NzbToken.ReadReleaseName(buffer)
+                          ?? Path.GetFileNameWithoutExtension(file.FileName);
+
+        return (token, string.IsNullOrWhiteSpace(releaseName) ? null : releaseName);
+    }
+
+    /// <summary>The release name we appended to the download URL, for the addurl path.</summary>
+    private static string? NameFromUrl(string? nameOrUrl)
+    {
+        if (string.IsNullOrWhiteSpace(nameOrUrl) || !Uri.TryCreate(nameOrUrl, UriKind.Absolute, out var uri))
+            return null;
+
+        return QueryHelpers.ParseQuery(uri.Query).TryGetValue("name", out var v) && v.ToString() is { Length: > 0 } n
+            ? n : null;
     }
 
     private static string? TokenFromUrl(string? nameOrUrl)
@@ -142,8 +194,18 @@ public static class SabnzbdEndpoints
         }).ToList();
     }
 
+    /// <summary>
+    /// What the `*arr` app sees this download called.
+    /// </summary>
+    /// <remarks>
+    /// The release name first, because Sonarr parses this string to work out what the download is. The
+    /// German episode title — "heute-show vom 29. Mai 2026" — carries no season or episode and can never
+    /// be imported. Episode and show titles remain the fallback for downloads started from our own UI,
+    /// which have no release name and are only ever displayed to a human.
+    /// </remarks>
     private static string DisplayName(DownloadJobResponse j) =>
-        !string.IsNullOrEmpty(j.EpisodeTitle) ? j.EpisodeTitle
+        !string.IsNullOrEmpty(j.ReleaseName) ? j.ReleaseName
+        : !string.IsNullOrEmpty(j.EpisodeTitle) ? j.EpisodeTitle
         : !string.IsNullOrEmpty(j.ShowTitle) ? j.ShowTitle
         : j.EpisodeId;
 
