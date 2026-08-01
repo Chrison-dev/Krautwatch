@@ -2,6 +2,7 @@ using Krautwatch.Application.Indexing;
 using Krautwatch.Domain.Entities;
 using Krautwatch.Domain.Enums;
 using Krautwatch.Domain.Interfaces;
+using Krautwatch.Domain.ValueObjects;
 using Shouldly;
 using Xunit;
 

@@ -35,6 +35,15 @@ public static class ApplicationServiceExtensions
         // Settings
         services.AddScoped<GetSettingsHandler>();
         services.AddScoped<SaveSettingsHandler>();
+        // Show↔TVDB mapping management. Repository-only, so safe for every host — unlike the resolver in
+        // AddTvdbMatching, none of these needs an ITvdbCatalog.
+        services.AddScoped<GetShowMappingsHandler>();
+        services.AddScoped<ConfirmShowMappingHandler>();
+        services.AddScoped<DeleteShowMappingHandler>();
+        services.AddScoped<ExportShowMappingsHandler>();
+        services.AddScoped<ImportShowMappingsHandler>();
+        services.AddScoped<ImportShowHintsHandler>();
+
         // Instance CRUD only needs IArrInstanceRepository, which every host gets from AddInfrastructure,
         // so these are safe here.
         services.AddScoped<GetArrInstancesHandler>();

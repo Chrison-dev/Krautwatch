@@ -1,5 +1,6 @@
 using Krautwatch.Domain.Entities;
 using Krautwatch.Domain.Interfaces;
+using Krautwatch.Domain.ValueObjects;
 
 namespace Krautwatch.Application.Indexing;
 

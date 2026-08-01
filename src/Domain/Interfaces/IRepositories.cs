@@ -87,6 +87,28 @@ public interface IShowMappingRepository
     Task DeleteAsync(int tvdbId, string showId, CancellationToken ct = default);
 }
 
+/// <summary>
+/// Persistence for curated mapping hints imported from a third-party set — see
+/// <see cref="ImportedShowHint"/> for why these cannot simply become mappings on import.
+/// </summary>
+public interface IImportedShowHintRepository
+{
+    /// <summary>Hints for one TVDB id. Usually none; occasionally one.</summary>
+    Task<IReadOnlyList<ImportedShowHint>> GetByTvdbIdAsync(int tvdbId, CancellationToken ct = default);
+
+    Task<IReadOnlyList<ImportedShowHint>> GetAllAsync(CancellationToken ct = default);
+
+    /// <summary>Replaces every hint from <paramref name="source"/>. Returns how many were stored.</summary>
+    /// <remarks>
+    /// Replace rather than merge: a re-import is the operator taking the newer version of that set, and
+    /// leaving withdrawn entries behind would silently keep applying corrections its authors removed.
+    /// </remarks>
+    Task<int> ReplaceSourceAsync(
+        string source,
+        IEnumerable<ImportedShowHint> hints,
+        CancellationToken ct = default);
+}
+
 /// <summary>Tracks which search terms have already been resolved against the broadcasters (#58).</summary>
 public interface IResolvedQueryRepository
 {

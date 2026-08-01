@@ -21,6 +21,17 @@ namespace Krautwatch.Domain.Entities;
 /// </remarks>
 public class ShowMapping
 {
+    /// <summary>
+    /// How many grabs of the same show, for the same TVDB id, before we stop asking and pick it ourselves.
+    /// </summary>
+    /// <remarks>
+    /// A repeated choice is evidence; a single one is not. Newznab cannot tell an interactive search from a
+    /// scheduled one, so one grab may have had no human behind it — but five, with alternatives on offer
+    /// every time, is a decision. Lives on the entity because both the Indexing resolver and the Settings
+    /// read model need it, and DR-009 forbids one slice reaching into another.
+    /// </remarks>
+    public const int AutoSelectAfterPicks = 5;
+
     /// <summary>The TheTVDB series id — the identity Sonarr asks us about.</summary>
     public int TvdbId { get; init; }
 
