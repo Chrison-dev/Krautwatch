@@ -6,6 +6,9 @@
 @inject CreateAdminHandler CreateAdmin
 @inject SetupToken SetupToken
 @inject NavigationManager Nav
+@inject IHttpContextAccessor HttpContextAccessor
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
 
 @* Static SSR deliberately (no @rendermode) — same reason as /login.
 
@@ -82,6 +85,46 @@
         Input ??= new();
         _setupRequired = await SetupState.IsSetupRequiredAsync();
         _tokenValid = SetupToken.Matches(Token);
+
+        // Before rendering the form, not after: the antiforgery token is generated during render and would
+        // otherwise be bound to the stale identity.
+        if (_setupRequired && _tokenValid)
+            await SignOutStaleSessionAsync();
+    }
+
+    /// <summary>
+    /// Clears any authentication cookie before the setup form is rendered, redirecting so the next request
+    /// is genuinely anonymous. Returns true when a redirect was issued.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Reaching setup means no administrator exists, so a session cookie here names an account that is gone
+    /// — it survives because cookie auth does not re-check the account on each request (#68). Cookies are
+    /// also scoped per host, not per port, so a session from any other Krautwatch on the same hostname
+    /// arrives here too.
+    /// </para>
+    /// <para>
+    /// Left alone this breaks the form outright. Antiforgery binds the <i>request</i> token to the current
+    /// user while the <i>cookie</i> token was issued anonymously, and the mismatched pair is rejected as
+    /// "A valid antiforgery token was not provided" — measured: 155-byte token and a 302 when signed out,
+    /// 198-byte token and a 400 with a stale cookie. Signing out first is also the honest behaviour:
+    /// claiming a fresh instance should not happen while holding someone else's session.
+    /// </para>
+    /// </remarks>
+    private async Task<bool> SignOutStaleSessionAsync()
+    {
+        var http = HttpContextAccessor.HttpContext;
+        if (http?.User.Identity?.IsAuthenticated != true)
+            return false;
+
+        // Only meaningful on the static-SSR pass, where the response has not started and a cookie can
+        // still be written. Setup is deliberately static SSR, so this always holds here.
+        if (http.Response.HasStarted)
+            return false;
+
+        await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        Nav.NavigateTo(Nav.Uri, forceLoad: true);
+        return true;
     }
 
     private async Task Submit()
