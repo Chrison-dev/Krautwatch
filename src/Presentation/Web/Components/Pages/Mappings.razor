@@ -1,0 +1,263 @@
+@page "/mappings"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject IServiceScopeFactory Scopes
+@using System.Text.Json
+@using Krautwatch.Application.Settings
+@using Krautwatch.Domain.Entities
+@using Krautwatch.Domain.Enums
+
+<PageTitle>Show mappings · Krautwatch</PageTitle>
+
+<h1>Show mappings</h1>
+
+<p class="muted">
+    Which of our broadcaster shows answers each TheTVDB id. Sonarr trusts the id over the release title, so
+    a wrong mapping quietly files episodes under the wrong series — these are worth a glance when something
+    lands in the wrong place.
+</p>
+
+@* ── Contested first ───────────────────────────────────────── *@
+<section class="panel">
+    <h2>Mappings</h2>
+
+    @if (_mappings is null)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else if (_mappings.Count == 0)
+    {
+        <p class="muted">
+            Nothing mapped yet. Mappings appear on their own as Sonarr searches by TVDB id — there is
+            normally no need to create them by hand.
+        </p>
+    }
+    else
+    {
+        @if (_mappings.Any(m => m.Contested))
+        {
+            <p class="warn small">
+                Some TVDB ids are claimed by more than one of our shows. Krautwatch offers all of them and
+                settles the question once one has been grabbed
+                @ShowMapping.AutoSelectAfterPicks times — or you can decide now.
+            </p>
+        }
+
+        <table class="grid">
+            <thead>
+                <tr>
+                    <th>Show</th>
+                    <th>Channel</th>
+                    <th>TVDB</th>
+                    <th>Source</th>
+                    <th>Grabs</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var m in _mappings)
+            {
+                <tr class="@(m.Contested ? "contested" : null)">
+                    <td>
+                        @m.ShowTitle
+                        @if (!string.IsNullOrEmpty(m.Evidence))
+                        {
+                            <div class="muted small">@m.Evidence</div>
+                        }
+                    </td>
+                    <td>@m.ChannelId</td>
+                    <td>
+                        <a href="https://www.thetvdb.com/dereferrer/series/@m.TvdbId"
+                           target="_blank" rel="noopener">@m.TvdbId</a>
+                    </td>
+                    <td>@Describe(m.Provenance)</td>
+                    <td>
+                        @m.PickCount
+                        @if (m.PicksUntilSettled is > 0 and var remaining)
+                        {
+                            <span class="muted small">(@remaining more settles it)</span>
+                        }
+                    </td>
+                    <td class="actions">
+                        @if (m.Provenance != MappingProvenance.OperatorConfirmed)
+                        {
+                            <button class="secondary" @onclick="() => ConfirmAsync(m)">Use this one</button>
+                        }
+                        <button class="danger" @onclick="() => DeleteAsync(m)">Remove</button>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    }
+
+    @if (_notice is not null)
+    {
+        <p class="@(_noticeOk ? "ok" : "warn")">@_notice</p>
+    }
+</section>
+
+@* ── Export / import ───────────────────────────────────────── *@
+<section class="panel">
+    <h2>Export &amp; import</h2>
+
+    <p class="muted small">
+        Mappings are keyed by TVDB id and our broadcaster show id, both of which are stable across installs —
+        so an export can be moved to another Krautwatch or kept as a backup. An import never overwrites a
+        mapping you confirmed yourself.
+    </p>
+
+    <div class="actions">
+        @* A plain authenticated download endpoint rather than JS interop: it works without an active
+           circuit, and the browser gets a real file with a real filename. *@
+        <a class="button secondary" href="mappings/export" download="krautwatch-mappings.json">
+            Download mappings
+        </a>
+    </div>
+
+    <label>
+        Paste an exported file to import
+        <textarea rows="5" @bind="_importJson" placeholder="[ { &quot;tvdbId&quot;: 234791, … } ]"></textarea>
+    </label>
+    <div class="actions">
+        <button class="secondary" @onclick="ImportAsync" disabled="@string.IsNullOrWhiteSpace(_importJson)">
+            Import mappings
+        </button>
+    </div>
+</section>
+
+@* ── Curated sets ──────────────────────────────────────────── *@
+<section class="panel">
+    <h2>Curated mapping sets</h2>
+
+    <p class="muted small">
+        RundfunkArr publishes a hand-curated list of German public-TV shows and their TVDB ids. Importing it
+        helps Krautwatch recognise a show by the name the Mediathek uses, which TVDB itself often does not
+        carry. It is a head start, not a complete answer — the set covers roughly a hundred shows, and only
+        the ones your instance has crawled can be matched.
+    </p>
+
+    <label>
+        Paste RundfunkArr's <code>rulesets.json</code>
+        <textarea rows="5" @bind="_hintJson" placeholder="contents of data/rulesets.json"></textarea>
+    </label>
+    <div class="actions">
+        <button class="secondary" @onclick="ImportHintsAsync" disabled="@string.IsNullOrWhiteSpace(_hintJson)">
+            Import curated set
+        </button>
+    </div>
+
+    @if (_hintNotice is not null)
+    {
+        <p class="@(_hintOk ? "ok" : "warn")">@_hintNotice</p>
+    }
+    @if (_hintMatched.Count > 0)
+    {
+        <details>
+            <summary>@_hintMatched.Count show(s) in this catalog matched</summary>
+            <ul class="muted small">
+                @foreach (var show in _hintMatched)
+                {
+                    <li>@show</li>
+                }
+            </ul>
+        </details>
+    }
+</section>
+
+@code {
+    IReadOnlyList<ShowMappingResponse>? _mappings;
+    string? _notice;
+    bool _noticeOk;
+
+    string _importJson = "";
+    string _hintJson = "";
+    string? _hintNotice;
+    bool _hintOk;
+    List<string> _hintMatched = [];
+
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    async Task LoadAsync()
+    {
+        using var scope = Scopes.CreateScope();
+        _mappings = await scope.ServiceProvider.GetRequiredService<GetShowMappingsHandler>().HandleAsync();
+    }
+
+    static string Describe(MappingProvenance provenance) => provenance switch
+    {
+        MappingProvenance.OperatorConfirmed => "you confirmed it",
+        MappingProvenance.Learned => "learned from grabs",
+        MappingProvenance.Imported => "imported",
+        _ => "matched automatically",
+    };
+
+    async Task ConfirmAsync(ShowMappingResponse mapping)
+    {
+        using var scope = Scopes.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<ConfirmShowMappingHandler>()
+            .HandleAsync(mapping.TvdbId, mapping.ShowId);
+
+        _noticeOk = true;
+        _notice = $"TVDB {mapping.TvdbId} now maps to {mapping.ShowTitle}.";
+        await LoadAsync();
+    }
+
+    async Task DeleteAsync(ShowMappingResponse mapping)
+    {
+        using var scope = Scopes.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<DeleteShowMappingHandler>()
+            .HandleAsync(mapping.TvdbId, mapping.ShowId);
+
+        _noticeOk = true;
+        _notice = $"Removed the mapping from {mapping.ShowTitle} to TVDB {mapping.TvdbId}.";
+        await LoadAsync();
+    }
+
+    async Task ImportAsync()
+    {
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<List<ShowMappingExport>>(_importJson, ShowMappingFile.Options) ?? [];
+            using var scope = Scopes.CreateScope();
+            var result = await scope.ServiceProvider.GetRequiredService<ImportShowMappingsHandler>()
+                .HandleAsync(parsed);
+
+            _noticeOk = result.Applied > 0;
+            _notice = $"Imported {result.Applied} mapping(s); skipped {result.Skipped}."
+                    + (result.Notes.Count > 0 ? " " + string.Join(" · ", result.Notes.Take(5)) : string.Empty);
+            _importJson = "";
+            await LoadAsync();
+        }
+        catch (JsonException ex)
+        {
+            _noticeOk = false;
+            _notice = $"That does not look like an exported mapping file: {ex.Message}";
+        }
+    }
+
+    async Task ImportHintsAsync()
+    {
+        try
+        {
+            var hints = RundfunkArrRulesets.Parse(_hintJson);
+            using var scope = Scopes.CreateScope();
+            var result = await scope.ServiceProvider.GetRequiredService<ImportShowHintsHandler>()
+                .HandleAsync(RundfunkArrRulesets.SourceName, hints);
+
+            _hintOk = result.Stored > 0;
+            _hintNotice = $"Stored {result.Stored} curated pair(s). "
+                        + $"{result.Matched} match a show already in this catalog; the rest apply "
+                        + "automatically if those shows are crawled later.";
+            _hintMatched = result.MatchedShows.ToList();
+            _hintJson = "";
+        }
+        catch (JsonException ex)
+        {
+            _hintOk = false;
+            _hintNotice = $"That does not look like RundfunkArr's rulesets.json: {ex.Message}";
+            _hintMatched = [];
+        }
+    }
+}

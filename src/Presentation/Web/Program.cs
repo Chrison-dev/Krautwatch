@@ -126,6 +126,14 @@ app.UseAuthorization();
 
 app.MapStaticAssets(); // serves wwwroot + the framework's blazor.web.js (.NET 10 static assets)
 app.MapDefaultEndpoints(); // /health, /alive from ServiceDefaults
+
+// Mapping export as a real file download. A plain endpoint rather than JS interop: it needs no active
+// circuit, and RequireAuthorization keeps it behind the same cookie as the page that links to it — the
+// export names every show this instance carries, so it is not public.
+app.MapGet("/mappings/export", async (ExportShowMappingsHandler export, CancellationToken ct) =>
+    Results.Json(await export.HandleAsync(ct), ShowMappingFile.Options, contentType: "application/json"))
+   .RequireAuthorization();
+
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
 // First-run: print the gated setup link. The token lives in memory for this process only, so it rotates

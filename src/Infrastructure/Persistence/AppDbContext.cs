@@ -18,6 +18,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ArrInstance> ArrInstances => Set<ArrInstance>();
     public DbSet<ResolvedQuery> ResolvedQueries => Set<ResolvedQuery>();
     public DbSet<ShowMapping> ShowMappings => Set<ShowMapping>();
+    public DbSet<ImportedShowHint> ImportedShowHints => Set<ImportedShowHint>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -277,6 +278,23 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             // A show maps to at most one series: two ids for one show would make the release we emit
             // ambiguous, and there would be no way to pick between them at query time.
             e.HasIndex(x => x.ShowId).IsUnique();
+        });
+
+        // --------------------------------------------------------
+        // ImportedShowHint — curated topic↔tvdbId pairs from a third-party set (RundfunkArr).
+        // No foreign key to Shows on purpose: most of an imported set names shows this instance has never
+        // crawled, and a hint is useful precisely because it can arrive before the show does.
+        // --------------------------------------------------------
+        modelBuilder.Entity<ImportedShowHint>(e =>
+        {
+            e.HasKey(x => new { x.TvdbId, x.NormalizedTopic });
+            e.Property(x => x.NormalizedTopic).HasMaxLength(500);
+            e.Property(x => x.Topic).IsRequired().HasMaxLength(500);
+            e.Property(x => x.Source).IsRequired().HasMaxLength(50);
+
+            // Read path is "any curated names for this id?"; the source index backs re-import and clearing.
+            e.HasIndex(x => x.TvdbId);
+            e.HasIndex(x => x.Source);
         });
 
         // --------------------------------------------------------

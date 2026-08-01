@@ -76,7 +76,8 @@ public class TvdbShowResolver(
     IShowMappingRepository mappings,
     IEpisodeRepository episodes,
     ITvdbCatalog tvdb,
-    ILogger<TvdbShowResolver> logger)
+    ILogger<TvdbShowResolver> logger,
+    IImportedShowHintRepository? hints = null)
 {
     /// <summary>
     /// How many of our shows may be offered for one id. Keeps an interactive search readable; the cap is
@@ -84,17 +85,8 @@ public class TvdbShowResolver(
     /// </summary>
     public const int MaxCandidates = 3;
 
-    /// <summary>
-    /// How many grabs of the same show, for the same TVDB id, before we stop asking and pick it ourselves.
-    /// </summary>
-    /// <remarks>
-    /// A repeated choice is evidence; a single one is not. Newznab cannot tell an interactive search from a
-    /// scheduled one, so one grab may have had no human behind it — but five grabs of the same show, when
-    /// alternatives were on offer every time, is a decision. Until the threshold is reached the candidates
-    /// are still offered, just ordered with the most-picked first, so the answer keeps getting easier to
-    /// give.
-    /// </remarks>
-    public const int AutoSelectAfterPicks = 5;
+    /// <inheritdoc cref="ShowMapping.AutoSelectAfterPicks"/>
+    public const int AutoSelectAfterPicks = ShowMapping.AutoSelectAfterPicks;
 
     /// <summary>
     /// How many ranked shows are worth the corroboration round trip. Ranking is cheap and in-memory, but
@@ -140,7 +132,7 @@ public class TvdbShowResolver(
         }
 
         var ourShows = (await episodes.GetShowsAsync(ct: ct)).Select(row => row.Show).ToList();
-        var ranked = ShowMatcher.Rank(series, ourShows);
+        var ranked = ShowMatcher.Rank(await WithImportedNamesAsync(series, ct), ourShows);
 
         var corroborated = new List<CorroboratedCandidate>();
         foreach (var candidate in ranked.Take(MaxCorroborationChecks))
@@ -225,6 +217,32 @@ public class TvdbShowResolver(
         ShowCandidate Candidate,
         CorroborationResult Corroboration,
         IReadOnlyList<Episode> OurEpisodes);
+
+    /// <summary>
+    /// Adds any imported curated names for this id to the series' alias list.
+    /// </summary>
+    /// <remarks>
+    /// A third-party set such as RundfunkArr's names the broadcaster side by its Mediathek topic — a name
+    /// TVDB itself may not carry. Folding those in as extra aliases lets the ordinary matcher find our show
+    /// without a second matching path, and without letting curated data skip corroboration: a hint improves
+    /// the <i>name</i> evidence, and the episode list still has to agree.
+    /// </remarks>
+    private async Task<TvdbSeries> WithImportedNamesAsync(TvdbSeries series, CancellationToken ct)
+    {
+        if (hints is null)
+            return series;
+
+        var imported = await hints.GetByTvdbIdAsync(series.TvdbId, ct);
+        if (imported.Count == 0)
+            return series;
+
+        var topics = imported.Select(hint => hint.Topic).ToList();
+        logger.LogDebug(
+            "TVDB {TvdbId}: adding {Count} imported name(s) to matching: {Topics}",
+            series.TvdbId, topics.Count, string.Join(", ", topics));
+
+        return series with { Aliases = series.Aliases.Concat(topics).Distinct().ToList() };
+    }
 
     /// <summary>
     /// Narrows stored mappings to the one we should answer with, or returns them all when the question is

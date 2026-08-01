@@ -66,6 +66,7 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IArrInstanceRepository, ArrInstanceRepository>();
         services.AddScoped<IResolvedQueryRepository, ResolvedQueryRepository>();
         services.AddScoped<IShowMappingRepository, ShowMappingRepository>();
+        services.AddScoped<IImportedShowHintRepository, ImportedShowHintRepository>();
         services.AddScoped<ILocalCredentialStore, LocalCredentialStore>();
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
 
