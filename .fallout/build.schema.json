@@ -26,10 +26,12 @@
       "enum": [
         "Compile",
         "Compose",
+        "GitHubRelease",
         "Images",
         "Push",
         "PushDockerHub",
         "PushGhcr",
+        "ReleaseBundle",
         "Test",
         "TestLive"
       ]
@@ -115,6 +117,10 @@
         "ImageTag": {
           "type": "string",
           "description": "Image tag. Defaults to the git tag on a tag build, otherwise 'dev'"
+        },
+        "Platforms": {
+          "type": "string",
+          "description": "Target platforms for the published manifest, comma-separated"
         },
         "Registry": {
           "type": "string",
