@@ -44,10 +44,17 @@ ARG INSTALL_FFMPEG=false
 LABEL org.opencontainers.image.source="https://github.com/Chrison-dev/Krautwatch"
 
 # libgssapi-krb5-2: required by Npgsql, see above — every service talks to Postgres.
+#
+# curl: so an orchestrator can actually call the /health endpoint the service already exposes.
+# Docker HEALTHCHECK, compose healthchecks and podman quadlet HealthCmd all run the command
+# *inside* the container, and no dotnet runtime image ships an HTTP client — so without this the
+# endpoint is unreachable from the only place that needs to reach it, and the container can only
+# be restarted when the process dies, never when it hangs. Costs a few MB.
+#
 # ffmpeg: only the Downloader remuxes HLS with `-c copy`; installing it everywhere would add ~380 MB
 # per image for nothing.
 RUN apt-get update \
- && apt-get install --no-install-recommends -y libgssapi-krb5-2 \
+ && apt-get install --no-install-recommends -y libgssapi-krb5-2 curl \
  && if [ "${INSTALL_FFMPEG}" = "true" ]; then apt-get install --no-install-recommends -y ffmpeg; fi \
  && rm -rf /var/lib/apt/lists/*
 
