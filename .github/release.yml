@@ -1,0 +1,50 @@
+# Source of truth for the PR label taxonomy.
+#
+# GitHub reads this to auto-generate release notes, grouping merged PRs into the sections below by
+# label. The build does not write the changelog itself — it asks GitHub for these notes and appends
+# the install section, so what ships in a release is exactly what the PRs said (see
+# build/Build.Release.cs).
+#
+# When raising a PR: apply the one category label that matches the change. A PR with no category
+# label falls through to "Other Changes" — prefer a real category.
+changelog:
+  exclude:
+    labels:
+      # skip-changelog: housekeeping with no consumer-facing note (CI, tooling, internal refactors).
+      # Keeps the notes signal-heavy.
+      - skip-changelog
+      # dependencies: bumps are folded out as noise. Also a category below, so the label stays
+      # documented in one place; the exclude wins.
+      - dependencies
+    authors:
+      - dependabot
+  categories:
+    # breaking-change: removes or renames a public surface — the Newznab/SABnzbd contract, a config
+    # key, an on-disk format, or the shape of the published images.
+    - title: "⚠️ Breaking Changes"
+      labels:
+        - breaking-change
+    # enhancement: a new feature or user-facing capability.
+    - title: "✨ New Features"
+      labels:
+        - enhancement
+    # bug: fixes incorrect behaviour.
+    - title: "🐛 Bug Fixes"
+      labels:
+        - bug
+    # security: fixes a vulnerability or hardens a security-sensitive surface.
+    - title: "🔒 Security"
+      labels:
+        - security
+    # dependencies: version bumps (excluded above — kept here for completeness).
+    - title: "📦 Dependencies"
+      labels:
+        - dependencies
+    # documentation: docs, comments, DRs and agent instructions only.
+    - title: "📖 Documentation"
+      labels:
+        - documentation
+    # Fallback for PRs carrying none of the labels above — don't rely on it.
+    - title: "Other Changes"
+      labels:
+        - "*"

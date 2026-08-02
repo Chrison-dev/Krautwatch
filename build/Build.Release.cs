@@ -80,13 +80,12 @@ partial class Build
 
             var assets = new[] { ReleaseDirectory / "docker-compose.yaml", ReleaseDirectory / ".env.example" };
 
-            // --generate-notes appends the commit/contributor list underneath our own body, so the
-            // curated part leads and the mechanical part follows.
+            // No --generate-notes: the notes file already contains GitHub's generated changelog, with
+            // the install section after it. The flag would append a second copy at the bottom.
             ProcessTasks.StartProcess("gh",
                     $"release create {ReleaseTag} " +
                     $"--title {ReleaseTag} " +
                     $"--notes-file {ReleaseDirectory / "notes.md"} " +
-                    "--generate-notes " +
                     string.Join(" ", assets.Select(x => $"\"{x}\"")),
                     RootDirectory)
                 .AssertZeroExitCode();
@@ -208,25 +207,36 @@ partial class Build
             $"{service.ToUpperInvariant().Replace('-', '_')}_IMAGE" == key);
 
     /// <summary>
-    /// Uses the annotated tag's own message as the release body.
+    /// Asks GitHub to generate the changelog from merged PRs, then appends the install section.
     /// </summary>
     /// <remarks>
-    /// The tag message is written when the release is cut and already says what shipped and what did
-    /// not; regenerating prose from commit subjects would say less and disagree with the tag.
+    /// <para>
+    /// The narrative comes from the PRs, grouped by label per <c>.github/release.yml</c> — so the notes
+    /// say what the reviewed changes said, and improving them is a matter of labelling PRs rather than
+    /// of writing release prose twice.
+    /// </para>
+    /// <para>
+    /// Generated through the API rather than <c>gh release create --generate-notes</c> so the build
+    /// controls the order: the changelog leads and the install section follows. The flag always appends
+    /// its output last, which would bury the changelog under boilerplate.
+    /// </para>
     /// </remarks>
     string BuildReleaseNotes()
     {
-        var probe = ProcessTasks.StartProcess("git", $"tag -l --format=%(contents) {ReleaseTag}",
+        // gh expands the {owner}/{repo} placeholders from the checkout's origin remote.
+        var probe = ProcessTasks.StartProcess("gh",
+            $"api repos/{{owner}}/{{repo}}/releases/generate-notes -f tag_name={ReleaseTag} --jq .body",
             RootDirectory, logOutput: false);
         probe.WaitForExit();
+        probe.AssertZeroExitCode();
 
-        var message = string.Join(Environment.NewLine, probe.Output.Select(x => x.Text)).Trim();
+        var changelog = string.Join(Environment.NewLine, probe.Output.Select(x => x.Text)).Trim();
 
         var pull = string.Join(Environment.NewLine,
             Services.Select(s => $"docker pull {RemoteImage(s.Service)}:{EffectiveTag}"));
 
         return $"""
-                {message}
+                {changelog}
 
                 ## Install
 
