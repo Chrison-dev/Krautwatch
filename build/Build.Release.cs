@@ -76,9 +76,9 @@ partial class Build
         .Executes(() =>
         {
             AssertTagged();
-            AssertPublishedImagesExist();
+            AssertImagesPublishedForThisCommit();
 
-            var assets = new[] { ReleaseDirectory / "docker-compose.yaml", ReleaseDirectory / ".env.example" };
+            var assets = new[] { ReleaseDirectory / "docker-compose.yaml", ReleaseDirectory / EnvTemplateName };
 
             // No --generate-notes: the notes file already contains GitHub's generated changelog, with
             // the install section after it. The flag would append a second copy at the bottom.
@@ -105,13 +105,94 @@ partial class Build
             "No tag points at HEAD — a release must be cut from a tagged commit.");
 
     /// <summary>
+    /// The env template's filename, without a leading dot.
+    /// </summary>
+    /// <remarks>
+    /// GitHub strips leading dots from release asset names, so an asset uploaded as <c>.env.example</c>
+    /// arrives as <c>default.env.example</c> — while the install text tells the reader to rename
+    /// <c>.env.example</c>. Naming it without the dot up front keeps the instructions true.
+    /// </remarks>
+    const string EnvTemplateName = "env.example";
+
+    /// <summary>
+    /// Blocks until the image publish for <b>this exact commit</b> has succeeded.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The previous version only asked the registry whether the tag existed, which is not the same
+    /// question. Re-tagging a released version publishes this workflow and the image workflow in the
+    /// same second; the images from the <i>previous</i> publish are already sitting under that tag, so
+    /// the check passed instantly and the release went out pointing at stale images while the real build
+    /// was still running. Observed doing exactly that on the v0.1.0 re-tag.
+    /// </para>
+    /// <para>
+    /// Waiting on the sibling workflow run for the same SHA is a real dependency rather than an
+    /// inference from a mutable tag. Off CI there is no run to wait on — a local release is a deliberate
+    /// act — so it falls back to the existence check, which is honest about being weaker.
+    /// </para>
+    /// </remarks>
+    void AssertImagesPublishedForThisCommit()
+    {
+        var sha = Environment.GetEnvironmentVariable("GITHUB_SHA");
+
+        if (string.IsNullOrWhiteSpace(sha))
+        {
+            Log.Warning("Not running in CI — falling back to checking the images merely exist.");
+            AssertPublishedImagesExist();
+            return;
+        }
+
+        var deadline = TimeSpan.FromMinutes(30);
+        var interval = TimeSpan.FromSeconds(20);
+        var waited = TimeSpan.Zero;
+
+        while (true)
+        {
+            // Two bare fields on separate lines rather than a jq-interpolated string: the arguments are
+            // passed straight to the process, not through a shell, so nested quoting does not survive.
+            var probe = ProcessTasks.StartProcess("gh",
+                $"api repos/{{owner}}/{{repo}}/actions/workflows/{ImageWorkflow}/runs?head_sha={sha} " +
+                "--jq .workflow_runs[0]|.status,.conclusion",
+                RootDirectory, logOutput: false);
+            probe.WaitForExit();
+
+            var lines = probe.Output.Select(x => x.Text.Trim()).Where(x => x.Length > 0).ToList();
+            var status = lines.ElementAtOrDefault(0);
+            var conclusion = lines.ElementAtOrDefault(1);
+
+            if (status == "completed")
+            {
+                Assert.True(conclusion == "success",
+                    $"{ImageWorkflow} for {sha} concluded '{conclusion}' — refusing to publish a release " +
+                    "whose images did not build.");
+
+                Log.Information("{Workflow} succeeded for {Sha}", ImageWorkflow, sha);
+                break;
+            }
+
+            if (waited >= deadline)
+                Assert.Fail($"{ImageWorkflow} for {sha} did not finish within {deadline.TotalMinutes:0} minutes.");
+
+            Log.Information("Waiting for {Workflow} on {Sha} (currently '{Status}')…",
+                ImageWorkflow, sha, string.IsNullOrWhiteSpace(status) ? "not started" : status);
+
+            Thread.Sleep(interval);
+            waited += interval;
+        }
+
+        // The run succeeding and the manifests being readable are different claims; assert both.
+        AssertPublishedImagesExist();
+    }
+
+    /// <summary>The workflow that publishes the images this release's bundle points at.</summary>
+    const string ImageWorkflow = "publish-ghcr.yml";
+
+    /// <summary>
     /// Fails unless every image the bundle references is actually on the registry.
     /// </summary>
     /// <remarks>
-    /// The tag push starts the image publish and this workflow at the same moment, so without a check
-    /// the release can win the race and ship a compose file pointing at images that do not exist yet —
-    /// or, if the image publish failed outright, that never will. Waiting is the honest behaviour: a
-    /// release is a promise that the thing is installable.
+    /// Weaker than <see cref="AssertImagesPublishedForThisCommit"/> — it proves the manifests are
+    /// readable, not that they came from this commit.
     /// </remarks>
     void AssertPublishedImagesExist()
     {
@@ -189,7 +270,7 @@ partial class Build
             })
             .ToList();
 
-        var env = ReleaseDirectory / ".env.example";
+        var env = ReleaseDirectory / EnvTemplateName;
         File.WriteAllLines(env, lines);
 
         Log.Information("Release bundle written to {Directory}", ReleaseDirectory);
@@ -240,7 +321,7 @@ partial class Build
 
                 ## Install
 
-                Download `docker-compose.yaml` and `.env.example` below, rename the latter to `.env`, fill in
+                Download `docker-compose.yaml` and `env.example` below, rename the latter to `.env`, fill in
                 `POSTGRES_PASSWORD` and `KRAUTWATCH_APIKEY` (and `TVDB_APIKEY` if you want TheTVDB matching),
                 then:
 
