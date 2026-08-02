@@ -149,13 +149,22 @@ does not depend on Presentation · a slice does not depend on sibling slices). K
 
 ## Common commands
 
-**Nuke** (`build/Build.cs`) is the build entry point and what CI runs — targets `Compile`, `Test`,
-`TestLive`:
+**[Fallout](https://fallout.build)** (`build/Build.cs`) is the build entry point and what CI runs —
+targets `Compile`, `Test`, `TestLive`. It is pinned as a local dotnet tool (`.config/dotnet-tools.json`),
+so `dotnet tool restore` first on a fresh clone:
 
 ```bash
 ./build.sh Test          # macOS/Linux — restore + compile + unit tests   (build.cmd on Windows)
 ./build.sh TestLive      # + Live.Tests: real ARD/ZDF network crawls & downloads (~5 min)
+dotnet fallout Test      # same thing via the tool, which is what CI invokes
 ```
+
+> **`.github/workflows/*.yml` is GENERATED — never hand-edit it.** The workflow is emitted from the
+> `[GitHubActions]` attributes on `Build`; editing the YAML directly is silently overwritten on the next
+> generation. Change the attribute, then regenerate:
+> ```bash
+> dotnet fallout --generate-configuration GitHubActions_build --host GitHubActions
+> ```
 
 **`Test` needs Docker running** — `Infrastructure.Tests` spins up a Postgres container
 (Testcontainers) shared across its repository fixtures via `PostgresCollection`.

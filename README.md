@@ -52,6 +52,64 @@ Launch the `Observability` profile to also get Prometheus, Grafana and Loki cont
 
 ---
 
+## Deploying with Docker Compose
+
+The compose file is **generated from the same Aspire model the dev fleet runs**, so the deployed
+topology cannot drift from the one that is tested daily. Build the images and render it:
+
+```bash
+./build.sh Images --image-tag 0.1.0      # six service images
+./build.sh Compose                       # .artifacts/compose/{docker-compose.yaml,.env}
+```
+
+Fill in `.artifacts/compose/.env` — it is generated with every key present and empty:
+
+```dotenv
+MIGRATOR_IMAGE=ghcr.io/chrison-dev/krautwatch-migrator:0.1.0
+NEWZNAB_IMAGE=ghcr.io/chrison-dev/krautwatch-newznab:0.1.0
+WEB_IMAGE=ghcr.io/chrison-dev/krautwatch-web:0.1.0
+AGENT_ARD_IMAGE=ghcr.io/chrison-dev/krautwatch-agent-ard:0.1.0
+AGENT_ZDF_IMAGE=ghcr.io/chrison-dev/krautwatch-agent-zdf:0.1.0
+AGENT_DOWNLOADER_IMAGE=ghcr.io/chrison-dev/krautwatch-agent-downloader:0.1.0
+
+POSTGRES_PASSWORD=<generate one>
+KRAUTWATCH_APIKEY=<generate one>        # required — see below
+TVDB_APIKEY=<optional>
+
+KRAUTWATCH_DOWNLOADS=/mnt/media/downloads   # host path, see below
+```
+
+```bash
+cd .artifacts/compose && docker compose up -d --wait
+```
+
+`newznab` is published on **:5055**, the web UI on **:5099**, and the Aspire dashboard on **:18888**.
+Postgres keeps its data in the named volume `krautwatch-pgdata`, so `docker compose down` does not
+discard your catalog — `down -v` does.
+
+### The one setting that matters: `KRAUTWATCH_DOWNLOADS`
+
+Sonarr imports by reading the file the Downloader wrote, so **both containers must see it at the same
+path**. Mount the same host directory into Sonarr at `/downloads` too:
+
+```yaml
+# in your existing *arr stack
+services:
+  sonarr:
+    volumes:
+      - /mnt/media/downloads:/downloads     # identical host path and container path
+```
+
+Matching both sides is what avoids Sonarr's remote-path mapping, which is the most common way an
+otherwise-working setup ends with "No files found are eligible for import".
+
+### `KRAUTWATCH_APIKEY` is required, not optional
+
+Sonarr refuses to configure a SABnzbd download client without an API key, so an empty value is not a
+working deployment. `t=caps` stays open regardless, so Prowlarr can still probe the indexer.
+
+---
+
 ## Wiring up Sonarr / Radarr / Prowlarr
 
 Point both at the `newznab` host (take its URL from the Aspire dashboard).
@@ -248,11 +306,19 @@ and conventions.
 
 ## Build & test
 
-Nuke (`build/Build.cs`) is the build entry point and what CI runs:
+[Fallout](https://fallout.build) (`build/Build.cs`) is the build entry point and what CI runs. It is
+pinned as a local dotnet tool, so run `dotnet tool restore` once on a fresh clone:
 
 ```bash
 ./build.sh Test        # restore + compile + unit/architecture tests   (build.cmd on Windows)
 ./build.sh TestLive    # + Live.Tests — real ARD/ZDF crawls and downloads (~5 min, needs network)
+```
+
+The GitHub Actions workflows under `.github/workflows/` are **generated** from the `[GitHubActions]`
+attributes on the build class — edit `build/Build.cs`, not the YAML, or your change is overwritten:
+
+```bash
+dotnet fallout --generate-configuration GitHubActions_build --host GitHubActions
 ```
 
 `Test` needs **Docker running**: the repository tests execute against a real Postgres container
