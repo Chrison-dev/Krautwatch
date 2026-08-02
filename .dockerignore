@@ -1,0 +1,24 @@
+# Build context for docker/service.Dockerfile.
+#
+# The image build runs its own `dotnet restore` + `dotnet publish` inside the SDK stage, so host build
+# output is never read — but it is still *sent*. That matters more than it looks: the `Images` target
+# depends on `Compile`, so the solution is always built before any image is, and without this file every
+# one of the six builds ships a full copy of the solution's bin/obj into its context. Locally that is
+# ~1.5 GB, six times over.
+#
+# Excluding .git is safe only because nothing here derives a version from it — no GitVersion, MinVer or
+# Nerdbank. Revisit this line if that ever changes.
+
+**/bin/
+**/obj/
+.git/
+.github/
+.artifacts/
+.fallout/
+.vs/
+.idea/
+**/node_modules/
+**/.DS_Store
+
+# The compose bind-mount target — media, never part of an image.
+downloads/

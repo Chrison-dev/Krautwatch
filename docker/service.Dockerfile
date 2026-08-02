@@ -32,6 +32,10 @@ FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS final
 ARG ASSEMBLY
 ARG INSTALL_FFMPEG=false
 
+# GHCR reads this label to link the package to its repository. Without it an org-owned package lands
+# unattached — no source link on the package page, and repo-scoped permissions do not apply to it.
+LABEL org.opencontainers.image.source="https://github.com/Chrison-dev/Krautwatch"
+
 # libgssapi-krb5-2: required by Npgsql, see above — every service talks to Postgres.
 # ffmpeg: only the Downloader remuxes HLS with `-c copy`; installing it everywhere would add ~380 MB
 # per image for nothing.
