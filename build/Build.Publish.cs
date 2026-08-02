@@ -45,6 +45,15 @@ partial class Build
     [Parameter("Image tag. Defaults to the git tag on a tag build, otherwise 'dev'.")]
     readonly string ImageTag;
 
+    /// <summary>Architectures published in each image's manifest list.</summary>
+    /// <remarks>
+    /// arm64 is not optional for this audience: a self-hosted media stack is as likely to be an Apple
+    /// Silicon Mac, a Pi or an ARM VPS as it is an x86 box. An amd64-only image either runs under
+    /// emulation or not at all, and Docker only warns about it in passing.
+    /// </remarks>
+    [Parameter("Target platforms for the published manifest, comma-separated")]
+    readonly string Platforms = "linux/amd64,linux/arm64";
+
     AbsolutePath ComposeDirectory => RootDirectory / ".artifacts" / "compose";
 
     /// <summary>
@@ -124,7 +133,7 @@ partial class Build
         });
 
     Target Images => _ => _
-        .Description("Build container images for every service")
+        .Description("Build single-architecture images locally (for running the stack on this machine)")
         .DependsOn(Compile)
         .Executes(() =>
         {
@@ -147,14 +156,14 @@ partial class Build
 
     Target Push => _ => _
         .Description("Push the images to --registry (defaults to ghcr.io)")
-        .DependsOn(Images)
+        .DependsOn(Compile)
         .Requires(() => RegistryUser)
         .Requires(() => RegistryPassword)
         .Executes(PushImages);
 
     Target PushGhcr => _ => _
         .Description("Push to GitHub Container Registry — CI target for the 'ghcr' environment")
-        .DependsOn(Images)
+        .DependsOn(Compile)
         .Requires(() => RegistryUser)
         .Requires(() => RegistryPassword)
         .Executes(() =>
@@ -165,7 +174,7 @@ partial class Build
 
     Target PushDockerHub => _ => _
         .Description("Push to Docker Hub — CI target for the 'dockerhub' environment")
-        .DependsOn(Images)
+        .DependsOn(Compile)
         .Requires(() => RegistryUser)
         .Requires(() => RegistryPassword)
         .Executes(() =>
@@ -174,9 +183,26 @@ partial class Build
             PushImages();
         });
 
-    /// <summary>Tags the locally built images for the target registry and pushes them.</summary>
+    /// <summary>
+    /// Builds and pushes a multi-architecture manifest per service.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// buildx builds and pushes in one step rather than reusing the images <see cref="Images"/> produces.
+    /// A manifest list cannot live in the classic local image store at all — so "build locally, tag, push"
+    /// has no multi-arch equivalent. Nothing is lost: the two registry workflows already run on separate
+    /// runners, so images were never genuinely shared between them anyway.
+    /// </para>
+    /// <para>
+    /// The build stage is pinned to BUILDPLATFORM (see the Dockerfile), so only the small runtime stage is
+    /// emulated. Without that, publishing arm64 would emulate the whole SDK — minutes per image, for
+    /// output that is identical portable IL either way.
+    /// </para>
+    /// </remarks>
     void PushImages()
     {
+        EnsureMultiPlatformBuilder();
+
         DockerLogin(_ => _
             .SetServer(EffectiveRegistry)
             .SetUsername(RegistryUser)
@@ -184,15 +210,23 @@ partial class Build
 
         try
         {
-            foreach (var service in Services.Select(s => s.Service))
+            foreach (var (service, project, assembly, ffmpeg) in Services)
             {
-                var local = $"{LocalImage(service)}:{EffectiveTag}";
                 var remote = $"{RemoteImage(service)}:{EffectiveTag}";
 
-                DockerTag(_ => _.SetSourceImage(local).SetTargetImage(remote));
-                DockerPush(_ => _.SetName(remote));
+                ProcessTasks.StartProcess("docker",
+                        $"buildx build {RootDirectory} " +
+                        $"--file {RootDirectory / "docker/service.Dockerfile"} " +
+                        $"--platform {Platforms} " +
+                        $"--build-arg PROJECT={project} " +
+                        $"--build-arg ASSEMBLY={assembly} " +
+                        $"--build-arg INSTALL_FFMPEG={ffmpeg.ToString().ToLowerInvariant()} " +
+                        $"--tag {remote} " +
+                        "--push",
+                        RootDirectory)
+                    .AssertZeroExitCode();
 
-                Log.Information("Pushed {Image}", remote);
+                Log.Information("Pushed {Image} for {Platforms}", remote, Platforms);
             }
         }
         finally
@@ -200,5 +234,42 @@ partial class Build
             // Leaves no credentials in the runner's docker config, even if a push failed.
             DockerLogout(_ => _.SetServer(EffectiveRegistry));
         }
+    }
+
+    /// <summary>
+    /// Makes sure buildx can produce foreign-architecture layers, and that a builder capable of
+    /// multi-platform output is selected.
+    /// </summary>
+    /// <remarks>
+    /// The default "docker" driver cannot emit a manifest list, so a docker-container builder is
+    /// required even when only one platform is requested. binfmt is only installed on CI: Docker Desktop
+    /// already registers the handlers, and running a --privileged container on a developer's machine to
+    /// re-do that would be a rude surprise.
+    /// </remarks>
+    void EnsureMultiPlatformBuilder()
+    {
+        const string builder = "krautwatch";
+
+        if (Environment.GetEnvironmentVariable("GITHUB_ACTIONS") == "true")
+        {
+            ProcessTasks.StartProcess("docker",
+                    "run --privileged --rm tonistiigi/binfmt --install all", RootDirectory)
+                .AssertZeroExitCode();
+        }
+
+        // `create` fails if the builder already exists, which is the normal case on a second run — so
+        // inspect first and only create when genuinely absent.
+        var probe = ProcessTasks.StartProcess("docker", $"buildx inspect {builder}", RootDirectory,
+            logOutput: false);
+        probe.WaitForExit();
+
+        if (probe.ExitCode != 0)
+        {
+            ProcessTasks.StartProcess("docker",
+                    $"buildx create --name {builder} --driver docker-container --bootstrap", RootDirectory)
+                .AssertZeroExitCode();
+        }
+
+        ProcessTasks.StartProcess("docker", $"buildx use {builder}", RootDirectory).AssertZeroExitCode();
     }
 }

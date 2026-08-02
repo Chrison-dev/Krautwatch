@@ -15,7 +15,14 @@
 ARG DOTNET_VERSION=10.0
 
 # ── build ────────────────────────────────────────────────────────────────────
-FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
+#
+# Pinned to BUILDPLATFORM — the *builder's* architecture, not the target's. Nothing here sets a
+# RuntimeIdentifier and every service publishes framework-dependent (UseAppHost=false), so the output
+# is portable IL: byte-for-byte identical whether the image will run on amd64 or arm64. Emulating the
+# SDK to produce it would cost minutes per image and change nothing.
+#
+# Only the runtime stage below varies per architecture, which is where it actually matters.
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
 ARG PROJECT
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
