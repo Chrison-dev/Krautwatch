@@ -64,6 +64,11 @@ partial class Build
     /// publish every release as "dev" and silently overwrite the previous one. <c>GITHUB_REF_NAME</c> is
     /// the tag on a tag build, and the leading "v" is stripped so the image tag reads 1.2.0 rather than
     /// v1.2.0 — the usual convention, and what a compose file will name.
+    /// <para>
+    /// Off CI there is no <c>GITHUB_REF_*</c>, so the tag at HEAD is used instead. Without that fallback
+    /// this disagreed with <see cref="ReleaseTag"/>, which does read git — and a release built locally
+    /// shipped a compose bundle pointing at <c>:dev</c> images while calling itself v0.1.0.
+    /// </para>
     /// </remarks>
     string EffectiveTag
     {
@@ -75,9 +80,10 @@ partial class Build
             var reference = Environment.GetEnvironmentVariable("GITHUB_REF_NAME");
             var isTagBuild = Environment.GetEnvironmentVariable("GITHUB_REF_TYPE") == "tag";
 
-            return isTagBuild && !string.IsNullOrWhiteSpace(reference)
-                ? reference.TrimStart('v')
-                : "dev";
+            if (isTagBuild && !string.IsNullOrWhiteSpace(reference))
+                return reference.TrimStart('v');
+
+            return string.IsNullOrWhiteSpace(ReleaseTag) ? "dev" : ReleaseTag.TrimStart('v');
         }
     }
 
@@ -124,8 +130,13 @@ partial class Build
             // `aspire publish` drives the AppHost's publish pipeline. Invoked through the CLI rather than
             // by running the AppHost directly: the CLI is what resolves the publisher and its arguments,
             // and it is the documented entry point.
-            ProcessTasks.StartProcess("aspire",
-                    $"publish --project src/Presentation/AppHost --output-path {ComposeDirectory}",
+            //
+            // Via `dotnet aspire`, not a bare `aspire`, because the CLI is pinned as a local tool
+            // (.config/dotnet-tools.json). A bare `aspire` only resolves for someone who happens to have
+            // run the standalone installer — which is true of a dev machine and false of a CI runner,
+            // where it fails as "command not found" long after the interesting work has already run.
+            ProcessTasks.StartProcess(DotNetPath,
+                    $"aspire publish --project src/Presentation/AppHost --output-path {ComposeDirectory}",
                     RootDirectory)
                 .AssertZeroExitCode();
 

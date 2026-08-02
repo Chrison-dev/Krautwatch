@@ -39,6 +39,19 @@ using static Fallout.Common.Tools.DotNet.DotNetTasks;
     InvokedTargets = new[] { nameof(PushGhcr) },
     EnvironmentName = "ghcr",
     ImportSecrets = new[] { nameof(RegistryUser), nameof(RegistryPassword) })]
+// The GitHub Release is a publish destination like any other: same tag trigger, its own environment,
+// its own approval. It builds nothing new — it packages the compose output and points at the images
+// the sibling workflow publishes, refusing to go out until those images are actually on the registry.
+[GitHubActions(
+    "publish-release",
+    GitHubActionsImage.UbuntuLatest,
+    FetchDepth = 0,
+    OnPushTags = new[] { "v*" },
+    InvokedTargets = new[] { nameof(GitHubRelease) },
+    EnvironmentName = "github-release",
+    // Creating a release writes to the repository, which the default token is not granted.
+    EnableGitHubToken = true,
+    WritePermissions = new[] { GitHubActionsPermissions.Contents })]
 [GitHubActions(
     "publish-dockerhub",
     GitHubActionsImage.UbuntuLatest,
