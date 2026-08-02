@@ -25,6 +25,11 @@
       "type": "string",
       "enum": [
         "Compile",
+        "Compose",
+        "Images",
+        "Push",
+        "PushDockerHub",
+        "PushGhcr",
         "Test",
         "TestLive"
       ]
@@ -105,7 +110,31 @@
     }
   },
   "allOf": [
-    {},
+    {
+      "properties": {
+        "ImageTag": {
+          "type": "string",
+          "description": "Image tag. Defaults to the git tag on a tag build, otherwise 'dev'"
+        },
+        "Registry": {
+          "type": "string",
+          "description": "Container registry to publish to, e.g. ghcr.io or docker.io"
+        },
+        "RegistryNamespace": {
+          "type": "string",
+          "description": "Registry namespace — the owner or organisation the images live under"
+        },
+        "RegistryPassword": {
+          "type": "string",
+          "description": "Registry password or token for the push",
+          "default": "Secrets must be entered via 'fallout :secrets [profile]'"
+        },
+        "RegistryUser": {
+          "type": "string",
+          "description": "Registry username for the push"
+        }
+      }
+    },
     {
       "$ref": "#/definitions/FalloutBuild"
     }

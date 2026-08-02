@@ -17,6 +17,7 @@ using Krautwatch.Infrastructure.Tvdb;
 using Tvdb.Abstractions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -242,15 +243,91 @@ public static class InfrastructureServiceExtensions
     }
 
     /// <summary>
-    /// Runs EF Core migrations. Call only from roles that own the DB (core + standalone).
+    /// How long to keep waiting for the database to accept connections before giving up.
     /// </summary>
+    /// <remarks>
+    /// Generous because it is only paid once, at startup, and the alternative is worse: a migrator that
+    /// exits non-zero because Postgres was two seconds late takes the whole compose stack down with it,
+    /// since every other service gates on it completing successfully.
+    /// </remarks>
+    private static readonly TimeSpan DatabaseWaitTimeout = TimeSpan.FromMinutes(3);
+
+    /// <summary>
+    /// Runs EF Core migrations, waiting for the database to become reachable first.
+    /// </summary>
+    /// <remarks>
+    /// The wait is not optional in a container deployment. Compose's <c>depends_on</c> with
+    /// <c>service_started</c> waits for the Postgres *container*, not for Postgres to accept
+    /// connections — observed live: the migrator raced it and died with "Connection refused", and because
+    /// every other service depends on the migrator completing, nothing else ever started. Retrying here
+    /// fixes it everywhere rather than only in compose, and also covers a database restart under the
+    /// running stack.
+    /// </remarks>
     public static async Task MigrateDatabaseAsync(this IHost host)
     {
         using var scope = host.Services.CreateScope();
         var db     = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<AppDbContext>>();
+
+        await WaitForDatabaseAsync(db, logger, host.Services.GetService<IHostApplicationLifetime>());
+
         logger.LogInformation("Running EF Core migrations...");
         await db.Database.MigrateAsync();
         logger.LogInformation("Migrations complete");
+    }
+
+    private static async Task WaitForDatabaseAsync(
+        AppDbContext db,
+        ILogger logger,
+        IHostApplicationLifetime? lifetime)
+    {
+        var deadline = DateTimeOffset.UtcNow + DatabaseWaitTimeout;
+        var delay = TimeSpan.FromSeconds(1);
+        var attempt = 0;
+        var ct = lifetime?.ApplicationStopping ?? CancellationToken.None;
+
+        while (true)
+        {
+            attempt++;
+            try
+            {
+                // Open the connection directly rather than using CanConnectAsync. CanConnectAsync answers
+                // "can I reach *this database*", and returns false when the server is up but the database
+                // does not exist yet — which is the normal state on a first run, since EF creates it a
+                // moment later. Waiting on it therefore blocks forever on a perfectly healthy server.
+                var connection = db.Database.GetDbConnection();
+                await connection.OpenAsync(ct);
+                await connection.CloseAsync();
+
+                if (attempt > 1)
+                    logger.LogInformation("Database reachable after {Attempts} attempts", attempt);
+                return;
+            }
+            catch (PostgresException missingDatabase) when (missingDatabase.SqlState == "3D000")
+            {
+                // invalid_catalog_name: the server is up and accepting authenticated connections, the
+                // database just is not there. That is exactly what MigrateAsync creates, so stop waiting.
+                logger.LogInformation("Server is up; database does not exist yet and will be created");
+                return;
+            }
+            catch (Exception ex) when (DateTimeOffset.UtcNow < deadline)
+            {
+                // Expected while the database is still starting; only the final failure is worth an error.
+                logger.LogDebug(ex, "Database not reachable yet (attempt {Attempt})", attempt);
+            }
+
+            if (DateTimeOffset.UtcNow >= deadline)
+            {
+                logger.LogError(
+                    "Database still unreachable after {Timeout:g}; giving up", DatabaseWaitTimeout);
+                throw new TimeoutException(
+                    $"The database did not become reachable within {DatabaseWaitTimeout:g}.");
+            }
+
+            await Task.Delay(delay, ct);
+            // Back off gently: quick early retries catch the common case of a database a second behind,
+            // without hammering it for three minutes in the genuinely-broken case.
+            delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 1.5, 10));
+        }
     }
 }
