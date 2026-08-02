@@ -259,3 +259,17 @@ DRs before structural changes.
 
 **Always persist a plan before executing it.** When a plan is agreed, write it to `docs/plans/` as
 `YYYY-MM-DD - <title>.md` before implementation begins.
+
+## Issues and PRs
+
+Read [`docs/agents/issue-and-pr-style.md`](docs/agents/issue-and-pr-style.md) before opening either.
+
+The short version: **a PR title is a changelog line.** It appears verbatim in the release notes,
+months later, out of context — so write an imperative sentence with **no `feat(scope):` prefix and no
+bare issue numbers**. The category label already states the type, and the notes group by it.
+
+**Label the PR when you create it**, in the same `gh pr create --label …` call.
+[`.github/release.yml`](.github/release.yml) lists the categories; an unlabelled PR falls through to
+"Other Changes". Note `dependencies` and `skip-changelog` are *excluded* from the notes — a PR
+carrying both `security` and `dependencies` vanishes entirely, so a CVE-fixing bump gets `security`
+alone.
