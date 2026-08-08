@@ -18,7 +18,8 @@ namespace Krautwatch.Infrastructure.Arr;
 /// looks nothing like a wrong API key, and a reverse-proxy subpath left off the base URL looks nothing
 /// like either. See <see cref="ArrConnectionFailure"/>.
 /// </remarks>
-public class ArrHttpClient(HttpClient http, ILogger<ArrHttpClient> logger) : IArrClient
+public class ArrHttpClient(HttpClient http, ISecretResolver secrets, ILogger<ArrHttpClient> logger)
+    : IArrClient
 {
     private const string StatusPath = "api/v3/system/status";
 
@@ -31,12 +32,18 @@ public class ArrHttpClient(HttpClient http, ILogger<ArrHttpClient> logger) : IAr
                 ArrConnectionFailure.Unexpected,
                 $"'{instance.BaseUrl}' is not a valid absolute URL.");
 
+        // The stored key may be a pointer rather than the secret. Resolve here, at the point of use —
+        // never on repository read, which would let an edit round-trip persist the resolved value.
+        var apiKey = secrets.Resolve(instance.ApiKey);
+        if (apiKey.Origin == SecretOrigin.Unresolved)
+            return ArrConnectionResult.Fail(ArrConnectionFailure.SecretUnresolved, apiKey.Problem!);
+
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
             // The *arr apps accept the key as a header or a query parameter. Header, so it never lands
             // in a proxy access log.
-            request.Headers.TryAddWithoutValidation("X-Api-Key", instance.ApiKey);
+            request.Headers.TryAddWithoutValidation("X-Api-Key", apiKey.Value);
 
             using var response = await http.SendAsync(request, ct);
 

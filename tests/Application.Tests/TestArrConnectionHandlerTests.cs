@@ -144,4 +144,31 @@ public class TestArrConnectionHandlerTests
         await client.DidNotReceive().TestConnectionAsync(
             Arg.Any<ArrInstance>(), Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task Testing_passes_the_stored_form_through_so_a_reference_resolves_at_the_client()
+    {
+        // Resolution belongs at the point of use, so the handler must hand the *pointer* to the client
+        // rather than resolving it itself — see docs/plans/2026-08-09 - secret-handling.md.
+        var repo = Substitute.For<IArrInstanceRepository>();
+        var client = Substitute.For<IArrClient>();
+        var stored = Instance();
+        stored.ApiKey = "env:SONARR_API_KEY";
+        repo.GetByIdAsync(stored.Id, Arg.Any<CancellationToken>()).Returns(stored);
+        client.TestConnectionAsync(Arg.Any<ArrInstance>(), Arg.Any<CancellationToken>())
+            .Returns(ArrConnectionResult.Fail(
+                ArrConnectionFailure.SecretUnresolved,
+                "Environment variable SONARR_API_KEY is not set in this container."));
+
+        var result = await new TestArrConnectionHandler(repo, client)
+            .HandleAsync(stored.Id, TestContext.Current.CancellationToken);
+
+        result.Ok.ShouldBeFalse();
+        result.Failure.ShouldBe("SecretUnresolved");   // distinct from Unauthorized, so the UI can explain
+        result.Message.ShouldContain("SONARR_API_KEY");
+
+        await client.Received(1).TestConnectionAsync(
+            Arg.Is<ArrInstance>(i => i != null && i.ApiKey == "env:SONARR_API_KEY"),
+            Arg.Any<CancellationToken>());
+    }
 }

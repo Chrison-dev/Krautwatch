@@ -42,7 +42,15 @@
                         <td>@i.Name</td>
                         <td>@i.Kind</td>
                         <td class="path small">@i.BaseUrl</td>
-                        <td class="small muted">@i.ApiKeyMasked</td>
+                        <td class="small muted">
+                            @i.ApiKeyMasked
+                            @if (i.ApiKeyProblem is not null)
+                            {
+                                @* A reference that does not resolve here would otherwise surface as an
+                                   inexplicable 401 on the next call. *@
+                                <span class="error" role="status"> · @i.ApiKeyProblem</span>
+                            }
+                        </td>
                         <td class="small">
                             @if (_rowNotice is { } notice && notice.Id == i.Id)
                             {
@@ -114,8 +122,15 @@
 
             <label>
                 API key
+                @* Stays a password field: it mostly receives real keys, and the reference case is visible
+                   on the row after saving, which is where seeing it actually matters. *@
                 <input @bind="_editing.ApiKey" type="password"
                        placeholder="@(_editing.Id is null ? "" : "leave blank to keep the current key")" />
+                <span class="muted small">
+                    Paste the key, or point at one kept outside the database:
+                    <code>env:SONARR_API_KEY</code> or <code>file:/run/secrets/sonarr</code>. A reference is
+                    read by whichever container uses it, so set it there.
+                </span>
             </label>
 
             <label class="checkbox">

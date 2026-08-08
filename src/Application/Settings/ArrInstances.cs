@@ -26,7 +26,11 @@ public record ArrInstanceResponse(
     bool Enabled,
     DateTimeOffset? LastTestedAt,
     bool? LastTestOk,
-    string? LastTestMessage);
+    string? LastTestMessage,
+    /// <summary>True when the key is a reference (<c>env:</c>/<c>file:</c>) rather than a stored secret.</summary>
+    bool ApiKeyIsReference = false,
+    /// <summary>Why a reference does not currently resolve, or null when it is fine.</summary>
+    string? ApiKeyProblem = null);
 
 /// <summary>
 /// Add or update an instance. A blank <paramref name="ApiKey"/> on an update means "leave it unchanged", so
@@ -78,10 +82,12 @@ public class SaveArrInstanceRequestValidator : AbstractValidator<SaveArrInstance
 // Handlers
 // ══════════════════════════════════════════════════════════════
 
-public class GetArrInstancesHandler(IArrInstanceRepository repository)
+public class GetArrInstancesHandler(IArrInstanceRepository repository, ISecretResolver secrets)
 {
     public async Task<IReadOnlyList<ArrInstanceResponse>> HandleAsync(CancellationToken ct = default) =>
-        (await repository.GetAllAsync(ct)).Select(ArrInstanceMapper.ToResponse).ToList();
+        (await repository.GetAllAsync(ct))
+        .Select(i => ArrInstanceMapper.ToResponse(i, secrets))
+        .ToList();
 }
 
 public class SaveArrInstanceHandler(IArrInstanceRepository repository)
@@ -132,6 +138,10 @@ public class DeleteArrInstanceHandler(IArrInstanceRepository repository)
 
 internal static class ArrInstanceMapper
 {
+    /// <summary>
+    /// Maps for display without a resolver — the key is masked, and no resolution state is reported.
+    /// Used where the caller only just wrote the record and has nothing to probe.
+    /// </summary>
     public static ArrInstanceResponse ToResponse(ArrInstance i) => new(
         Id: i.Id,
         Name: i.Name,
@@ -141,16 +151,41 @@ internal static class ArrInstanceMapper
         Enabled: i.Enabled,
         LastTestedAt: i.LastTestedAt,
         LastTestOk: i.LastTestOk,
-        LastTestMessage: i.LastTestMessage);
+        LastTestMessage: i.LastTestMessage,
+        ApiKeyIsReference: SecretReference.IsReference(i.ApiKey));
+
+    /// <summary>
+    /// Maps for display, additionally reporting whether a reference currently resolves — so the settings
+    /// page can say "env:SONARR_API_KEY · not set" at a glance rather than only on a connection test.
+    /// </summary>
+    public static ArrInstanceResponse ToResponse(ArrInstance i, ISecretResolver secrets)
+    {
+        var response = ToResponse(i);
+        if (!response.ApiKeyIsReference)
+            return response;
+
+        var resolved = secrets.Resolve(i.ApiKey);
+        return response with
+        {
+            ApiKeyProblem = resolved.Origin == SecretOrigin.Unresolved ? resolved.Problem : null,
+        };
+    }
 
     /// <summary>
     /// Shows only the last four characters — enough to tell two keys apart when checking which one is
     /// configured, without disclosing anything usable.
     /// </summary>
+    /// <remarks>
+    /// A <b>reference is not a credential</b>, so it is shown verbatim: the operator needs to see which
+    /// variable or file is wired, and masking it would hide exactly the thing they came to check.
+    /// </remarks>
     internal static string Mask(string? apiKey)
     {
         if (string.IsNullOrEmpty(apiKey))
             return string.Empty;
+
+        if (SecretReference.IsReference(apiKey))
+            return apiKey.Trim();
 
         // Too short to reveal any of it and still be a mask.
         return apiKey.Length <= 4 ? "••••" : "••••" + apiKey[^4..];

@@ -34,6 +34,7 @@ public enum TvdbKeyOrigin
 /// </remarks>
 public class TvdbApiKeySource(
     IServiceScopeFactory scopeFactory,
+    ISecretResolver secrets,
     ILogger<TvdbApiKeySource> logger,
     string? configuredKey,
     string? configuredPin)
@@ -97,7 +98,13 @@ public class TvdbApiKeySource(
             {
                 using var scope = scopeFactory.CreateScope();
                 var settings = scope.ServiceProvider.GetService<ISettingsRepository>();
-                _databaseKey = settings?.GetAsync().GetAwaiter().GetResult()?.TvdbApiKey;
+                var stored = settings?.GetAsync().GetAwaiter().GetResult()?.TvdbApiKey;
+
+                // The stored key may be a pointer (`env:`/`file:`) rather than the secret itself. An
+                // unresolvable one leaves TVDB unconfigured, which degrades matching but never breaks
+                // search — the same outcome as no key at all, and already warned about by the resolver.
+                var resolved = secrets.Resolve(stored);
+                _databaseKey = resolved.HasValue ? resolved.Value : null;
             }
             catch (Exception ex)
             {

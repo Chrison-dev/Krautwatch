@@ -263,8 +263,47 @@ emitted without a `tvdbid` attribute, and Sonarr falls back to parsing our title
 same way, deliberately — Sonarr disables an indexer that keeps erroring, so a third-party outage must never
 cost you the indexer.
 
-> The key is stored in plain text today, like the `*arr` instance keys — see issue #60 for encrypting
-> secrets at rest.
+> Entered through the UI the key is stored **as you typed it**, in plain text, like the `*arr` instance
+> keys. To keep it out of the database entirely, store a **secret reference** instead — see below.
+
+### Keeping secrets out of the database
+
+Anything you can enter as a credential in the UI — an `*arr` instance API key, the TheTVDB key — can be
+stored as a **pointer to the secret** rather than the secret itself:
+
+| Stored value | Meaning |
+|---|---|
+| `abc123def456` | the key itself — plain text in Postgres, the default when you paste one in |
+| `env:SONARR_API_KEY` | read from that environment variable |
+| `file:/run/secrets/sonarr` | read from that file — a Docker/Kubernetes mounted secret |
+| `literal:env:weird-key` | take the rest literally, for the rare key that starts with a scheme |
+
+So a compose deployment can keep every credential in `.env` or a secrets mount, and a database dump
+contains **no credentials at all** — which is stronger than encrypting them, and there is no key ring to
+back up or lose. Paste the reference into the settings field exactly as you would a key.
+
+```yaml
+services:
+  web:
+    environment:
+      SONARR_API_KEY: ${SONARR_API_KEY}      # then store "env:SONARR_API_KEY" in the UI
+    # or, with a secrets mount:
+    secrets: [sonarr_key]                    # then store "file:/run/secrets/sonarr_key"
+```
+
+Two things to know:
+
+- **A reference is resolved by the container that uses it.** Set the variable, or mount the file, in
+  every host that needs it. If it is missing, the settings page says so on the row and the connection
+  test names the variable — rather than authenticating with an empty key and reporting a confusing 401.
+- **References are not hidden in the UI**, because a pointer is not a credential — you need to see which
+  variable is wired. Literal keys stay masked.
+
+> **What this does and does not protect.** A reference keeps the secret out of database dumps, backups,
+> snapshots and stolen volumes — the realistic leak path for a self-hosted app. It does **not** protect a
+> compromised application host: the app has to read the secret, so anything running as the app can too.
+> Encryption at rest has exactly the same limitation. See
+> [`docs/plans/2026-08-09 - secret-handling.md`](docs/plans/2026-08-09%20-%20secret-handling.md).
 
 ### Downloads
 
