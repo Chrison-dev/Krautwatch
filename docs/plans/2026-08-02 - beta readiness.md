@@ -1,6 +1,11 @@
 # 2026-08-02 — Beta readiness
 
-**Status:** in progress · branch `feat/compose-and-image-publishing` (1 commit, unpushed, no PR yet)
+**Status:** ✅ **shipped as v0.1.1** (2026-08-02). Branch merged via PR #24; the release publishes
+multi-arch images to GHCR plus `docker-compose.yaml` + `env.example` as assets.
+
+**One item outstanding:** proving Sonarr's import (item 4 below). Everything else on this plan is done.
+
+*(Reviewed 2026-08-09 — doc-sync pass. Kept as the record of what the beta covered.)*
 
 Where the first beta stands, and what is left. The engineering detail lives in the commit messages;
 this is the state that is not otherwise written down anywhere.
@@ -21,23 +26,27 @@ The import step has never been proven. Everything up to it has, against a real S
 
 ## Remaining before the beta ships
 
-1. **Create the GitHub environments** — `ghcr` and `dockerhub`, each holding `REGISTRY_USER` and
-   `REGISTRY_PASSWORD`. A PAT with `write:packages` works for GHCR. Nothing can publish until these
-   exist; the workflows are generated and waiting.
-2. **Confirm `RegistryNamespace`** — defaults to `chrison-dev` in `build/Build.Publish.cs`.
-3. **Raise the PR** for this branch.
-4. **Prove the import**, which needs Krautwatch's downloader and Sonarr to share a filesystem. Until
-   then the last hop is configuration-shaped rather than demonstrated.
+1. ~~**Create the GitHub environments**~~ — ✅ done; `ghcr` publishes on every release.
+2. ~~**Confirm `RegistryNamespace`**~~ — ✅ `chrison-dev`, as published in v0.1.0 / v0.1.1.
+3. ~~**Raise the PR** for this branch~~ — ✅ merged (#24), plus follow-ups #76 / #77 / #78 hardening the
+   release job (wait for this commit's image build, PR-title changelog lines, `curl` in the images).
+4. ⬜ **Prove the import**, which needs Krautwatch's downloader and Sonarr to share a filesystem. Until
+   then the last hop is configuration-shaped rather than demonstrated. **Still the top open item.**
 
-## Running state (2026-08-02, will not survive a reboot)
+## Running state (2026-08-02 — ⚠️ expired, do not trust)
 
-- **Compose stack up** from `.artifacts/compose/` — 7 services. `newznab` :5055, `web` :5099,
+As of 2026-08-09 the Docker daemon is not even running, so none of the below is live. Reconstruct with
+`docker compose up -d` from a release's compose file rather than expecting these to be there. Recorded
+only so the test data is recognisable if it does resurface:
+
+- **Compose stack** was up from `.artifacts/compose/` — 7 services. `newznab` :5055, `web` :5099,
   Aspire dashboard :18888. Secrets are in `.artifacts/compose/.env`, which is gitignored: the API key
-  and Postgres password only exist there, so read them from that file rather than regenerating.
-- **A stray `postgres-cyncxsrx` container** survives from the earlier Aspire dev fleet, whose parent
-  process is long gone. It holds the dev catalog used for the PR #70/#71 demos — 23 crawled shows,
-  the `extra 3` mapping at 5 picks, 65 RundfunkArr hints. Harmless, but it is not the compose
-  database and nothing depends on it. Safe to remove once that test data is no longer wanted.
+  and Postgres password only exist there, so read them from that file rather than regenerating — if
+  that file is gone, the old stack's data is unreachable and regenerating is the only option.
+- **A stray `postgres-cyncxsrx` container** survived from the earlier Aspire dev fleet, whose parent
+  process was long gone. It held the dev catalog used for the PR #70/#71 demos — 23 crawled shows,
+  the `extra 3` mapping at 5 picks, 65 RundfunkArr hints. Harmless, and nothing depends on it.
+  Safe to remove once that test data is no longer wanted.
 
 ## Configuration left on the operator's Sonarr (192.168.179.153)
 
@@ -57,5 +66,7 @@ Krautwatch actually gets deployed, or deleting.
 - A genuinely `daily` Sonarr series is untested — we emit `SxxEyy` whenever TVDB supplies numbers.
 - The ffmpeg/HLS download path has no stall guard; only the progressive-MP4 path does.
 - SABnzbd queue reports `mb`/`timeleft` as zero. Cosmetic — Sonarr tracks by `nzo_id`.
-- `NU1608` fires on every restore: `Scrutor.Extensions.HttpClient` 5.0.1 caps
-  `Microsoft.Extensions.Http` below 10.0.0. First-party package; a net10 bump clears it repo-wide.
+- `NU1608` fires on every restore (still true 2026-08-09, on 5 projects): `Scrutor.Extensions.HttpClient`
+  5.0.1 caps `Microsoft.Extensions.Http` below 10.0.0, but 10.0.10 resolves. It arrives **transitively via
+  `TvdbClient` 4.7.12** — nothing in this repo references Scrutor directly, so the fix is a net10 bump of
+  `TvdbClient` (first-party), which clears it repo-wide.
