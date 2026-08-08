@@ -74,9 +74,9 @@ topology cannot drift from the one that is tested daily.
 [latest release](../../releases/latest), rename the latter to `.env`, and fill it in — the images it
 references are already published, so there is nothing to build.
 
-> ⚠️ Add `KRAUTWATCH_DOWNLOADS` yourself — it is missing from the generated `env.example`
-> ([#83](../../issues/83)), and without it downloads land in `./downloads` next to the compose file
-> where Sonarr will not find them.
+> ⚠️ **Set `KRAUTWATCH_DOWNLOADS` to a real path.** On v0.1.1 it is missing from `env.example` entirely
+> ([#83](../../issues/83), fixed for the next release) — and blank behaves the same as absent, so either
+> way downloads land in `./downloads` next to the compose file where Sonarr will not find them.
 
 **To build your own** (a dev build, or a change you have not released):
 
