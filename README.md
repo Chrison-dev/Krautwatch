@@ -63,12 +63,20 @@ Launch the `Observability` profile to also get Prometheus, Grafana and Loki cont
 
 ## Deploying with Docker Compose
 
+> 📖 **[Self-hosting guide](docs/self-hosting.md)** — the step-by-step version of this section, covering
+> NAS/Pi specifics, `*arr` wiring, backups, upgrades and troubleshooting. Start there if you are
+> deploying rather than developing.
+
 The compose file is **generated from the same Aspire model the dev fleet runs**, so the deployed
 topology cannot drift from the one that is tested daily.
 
 **To just run it,** take `docker-compose.yaml` + `env.example` from the
 [latest release](../../releases/latest), rename the latter to `.env`, and fill it in — the images it
 references are already published, so there is nothing to build.
+
+> ⚠️ Add `KRAUTWATCH_DOWNLOADS` yourself — it is missing from the generated `env.example`
+> ([#83](../../issues/83)), and without it downloads land in `./downloads` next to the compose file
+> where Sonarr will not find them.
 
 **To build your own** (a dev build, or a change you have not released):
 

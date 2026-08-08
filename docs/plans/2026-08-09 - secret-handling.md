@@ -1,6 +1,9 @@
 # 2026-08-09 — Secret handling: references instead of encryption
 
-**Status:** proposed · supersedes the approach in [#60](../../../../issues/60)
+**Status:** ✅ implemented (PR #82, merged 2026-08-09) · supersedes the approach in
+[#60](../../../../issues/60)
+
+Operator-facing documentation lives in the [self-hosting guide](../self-hosting.md#7-keeping-credentials-out-of-the-database).
 
 #60 asks to encrypt `*arr` API keys at rest. This plan argues for a different mechanism that reaches the
 same goal more cheaply, and records why — the issue itself says the key-management decision is the
@@ -147,14 +150,15 @@ is which rather than implying the feature makes the product secure.
 
 ## Scope
 
-- [ ] `ISecretResolver` port + Infrastructure adapter (`env:`, `file:`, `literal:`, bare literal).
-- [ ] Resolve at `ArrHttpClient` and in `TvdbApiKeySource`'s database branch.
-- [ ] Guard against the round-trip hazard: an edit that leaves the key blank must never rewrite a
-      reference as a resolved literal. Cover with a test.
-- [ ] Surface origin + resolution state on the settings read models; stop masking references.
-- [ ] Loud, specific failure for an unresolvable reference, surfaced through the connection test.
-- [ ] Audit for disclosure: no resolved values in logs or exception messages.
-- [ ] Document in the self-hosting guide (#26): the schemes, the per-host rule, and the honest threat
+- [x] `ISecretResolver` port + Infrastructure adapter (`env:`, `file:`, `literal:`, bare literal).
+- [x] Resolve at `ArrHttpClient` and in `TvdbApiKeySource`'s database branch.
+- [x] Guard against the round-trip hazard: an edit that leaves the key blank must never rewrite a
+      reference as a resolved literal. Covered by `SecretReferenceRoundTripTests`.
+- [x] Surface origin + resolution state on the settings read models; stop masking references.
+- [x] Loud, specific failure for an unresolvable reference, surfaced through the connection test
+      (`ArrConnectionFailure.SecretUnresolved`).
+- [x] Audit for disclosure: no resolved values in logs or exception messages.
+- [x] Document in the self-hosting guide (#26): the schemes, the per-host rule, and the honest threat
       model above.
 
 ## Explicitly out of scope
