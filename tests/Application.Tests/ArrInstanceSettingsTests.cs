@@ -22,7 +22,8 @@ public class ArrInstanceReadModelTests
             ApiKey = "supersecretkey1234",
         }]);
 
-        var result = await new GetArrInstancesHandler(repo).HandleAsync(TestContext.Current.CancellationToken);
+        var result = await new GetArrInstancesHandler(repo, Substitute.For<ISecretResolver>())
+            .HandleAsync(TestContext.Current.CancellationToken);
 
         var instance = result.ShouldHaveSingleItem();
         instance.ApiKeyMasked.ShouldBe("••••1234");

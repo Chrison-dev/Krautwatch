@@ -6,6 +6,7 @@ using Krautwatch.Domain.Entities;
 using Krautwatch.Domain.Enums;
 using Krautwatch.Domain.Interfaces;
 using Krautwatch.Infrastructure.Arr;
+using Krautwatch.Infrastructure.Secrets;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
 using Xunit;
@@ -24,7 +25,9 @@ public class ArrHttpClientTests
     };
 
     private static ArrHttpClient Client(StubHandler handler) =>
-        new(new HttpClient(handler), NullLogger<ArrHttpClient>.Instance);
+        new(new HttpClient(handler),
+            new SecretResolver(NullLogger<SecretResolver>.Instance),
+            NullLogger<ArrHttpClient>.Instance);
 
     // ── success ───────────────────────────────────────────────
 
@@ -75,6 +78,45 @@ public class ArrHttpClientTests
 
         handler.LastRequest!.RequestUri!.AbsoluteUri
             .ShouldBe("http://sonarr:8989/api/v3/system/status");
+    }
+
+    [Fact]
+    public async Task Resolves_a_stored_reference_before_sending_it()
+    {
+        var handler = StubHandler.Json("""{"appName":"Sonarr","version":"4.0"}""");
+        Environment.SetEnvironmentVariable("KRAUTWATCH_TEST_ARR_KEY", "resolved-key");
+        try
+        {
+            var instance = Instance();
+            instance.ApiKey = "env:KRAUTWATCH_TEST_ARR_KEY";
+
+            await Client(handler).TestConnectionAsync(instance, TestContext.Current.CancellationToken);
+
+            handler.LastRequest!.Headers.GetValues("X-Api-Key")
+                .ShouldHaveSingleItem().ShouldBe("resolved-key");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("KRAUTWATCH_TEST_ARR_KEY", null);
+        }
+    }
+
+    [Fact]
+    public async Task An_unresolvable_reference_fails_loudly_without_calling_out()
+    {
+        // Sending an empty key would come back as a 401 the operator cannot explain, when the real fault
+        // is an unset variable — so this is its own failure mode, and no request is made at all.
+        var handler = StubHandler.Json("""{"appName":"Sonarr","version":"4.0"}""");
+        var instance = Instance();
+        instance.ApiKey = "env:KRAUTWATCH_TEST_ARR_KEY_NOT_SET";
+
+        var result = await Client(handler)
+            .TestConnectionAsync(instance, TestContext.Current.CancellationToken);
+
+        result.Ok.ShouldBeFalse();
+        result.Failure.ShouldBe(ArrConnectionFailure.SecretUnresolved);
+        result.Message.ShouldContain("KRAUTWATCH_TEST_ARR_KEY_NOT_SET");
+        handler.LastRequest.ShouldBeNull();
     }
 
     // ── classified failures ───────────────────────────────────

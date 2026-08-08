@@ -57,5 +57,12 @@ public enum ArrConnectionFailure
     /// <summary>200, but the response is not an `*arr` system-status payload — usually the wrong port entirely.</summary>
     NotAnArrInstance = 5,
 
+    /// <summary>
+    /// The stored API key is a reference (<c>env:</c>/<c>file:</c>) that does not resolve in this process.
+    /// Distinguished from <see cref="Unauthorized"/> deliberately: authenticating with an empty string
+    /// would report a 401 the operator cannot explain, when the real fault is an unset variable.
+    /// </summary>
+    SecretUnresolved = 6,
+
     Unexpected = 99,
 }

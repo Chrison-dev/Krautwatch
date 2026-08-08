@@ -11,6 +11,7 @@ using Krautwatch.Infrastructure.Jobs;
 using Krautwatch.Infrastructure.Messaging;
 using Krautwatch.Infrastructure.Persistence;
 using Krautwatch.Infrastructure.Proxies;
+using Krautwatch.Infrastructure.Secrets;
 using Krautwatch.Infrastructure.Settings;
 using Krautwatch.Infrastructure.System;
 using Krautwatch.Infrastructure.Tvdb;
@@ -19,6 +20,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -71,6 +73,19 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<ILocalCredentialStore, LocalCredentialStore>();
         services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
 
+        services.AddSecretResolver();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the stored-credential resolver, which lets a stored secret be a reference (<c>env:</c> /
+    /// <c>file:</c>) rather than the secret itself. Idempotent, because the adapters that need it are
+    /// registered by several independent Add* calls.
+    /// </summary>
+    public static IServiceCollection AddSecretResolver(this IServiceCollection services)
+    {
+        services.TryAddSingleton<ISecretResolver, SecretResolver>();
         return services;
     }
 
@@ -154,6 +169,7 @@ public static class InfrastructureServiceExtensions
             // long for that.
             http.Timeout = TimeSpan.FromSeconds(10);
         });
+        services.AddSecretResolver();   // the stored API key may be an env:/file: reference
         return services;
     }
 
@@ -169,8 +185,11 @@ public static class InfrastructureServiceExtensions
         var configuredKey = configuration["TvdbConfiguration:ApiKey"];
         var configuredPin = configuration["TvdbConfiguration:Pin"];
 
+        services.AddSecretResolver();   // a stored TVDB key may be an env:/file: reference
+
         services.AddSingleton(sp => new TvdbApiKeySource(
             sp.GetRequiredService<IServiceScopeFactory>(),
+            sp.GetRequiredService<ISecretResolver>(),
             sp.GetRequiredService<ILogger<TvdbApiKeySource>>(),
             configuredKey,
             configuredPin));
