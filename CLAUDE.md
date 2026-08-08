@@ -9,37 +9,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - It exposes a **Newznab indexer** (`caps`/`search`/`tvsearch` + an RSS feed) that Sonarr/Prowlarr call.
 - It exposes a **SABnzbd-compatible download client** API, then pulls the actual streams via direct
-  HTTP/HLS + ffmpeg (with subtitles).
-- Per-broadcaster **crawler agents** build the catalog; the only first-party UI is **instance
-  configuration** (which Sonarr/Radarr to reach back to). See DR-010.
+  HTTP/HLS + ffmpeg. (Subtitles are *not* fetched yet — #20.)
+- Per-broadcaster **crawler agents** build the catalog. There is also a standalone **Web** UI (search /
+  manual download / monitor / settings, including which Sonarr/Radarr to reach back to). See DR-010.
 
-> **⚠️ Architecture reset in progress (DR-009).** The solution has been renamed
-> **MediathekNext → Krautwatch** and reshaped into the layers below (Presentation fleet in place;
-> `CoreWorker`/`Worker` role hosts dropped). Postgres + durable Wolverine (Postgres transport) are wired and a
-> run-to-completion **Migrator** owns EF migrations. The **ARD (+KiKA) and ZDF agents crawl their configured shows into Postgres** via the
-> `Application/Crawling` Action (broadcaster clients behind the `IBroadcasterCrawler` port; the
-> scheduler dispatches `CrawlShowCommand` through the `IMessageDispatcher` port over the durable bus).
-> The **Newznab indexer + SABnzbd download client** are live (`Api/NewznabIndexerApi`); the pre-DR-010
-> browser (`Api/PublicApi` + `Web`) is retired. The **Downloader agent** polls the durable job table and
+> **Status (2026-08-09): the architecture reset (DR-009) has landed, and v0.1.1 is released.** The
+> solution was renamed **MediathekNext → Krautwatch** and reshaped into the layers below (Presentation
+> fleet in place; `CoreWorker`/`Worker` role hosts dropped). Postgres + durable Wolverine (Postgres
+> transport) are wired and a run-to-completion **Migrator** owns EF migrations. The **ARD (+KiKA) and ZDF
+> agents crawl shows into Postgres** via the `Application/Crawling` Action (broadcaster clients behind the
+> `IBroadcasterCrawler` port; the scheduler dispatches `CrawlShowCommand` through the `IMessageDispatcher`
+> port over the durable bus). The **Newznab indexer + SABnzbd download client** are live
+> (`Api/NewznabIndexerApi`); the pre-DR-010 browser (`Api/PublicApi`) is retired — only stale `bin`/`obj`
+> residue remains on disk, there is no project. The **Downloader agent** polls the durable job table and
 > pulls each stream to disk, routing by type: a raw byte copy for progressive MP4, or an ffmpeg remux
-> (`-c copy`) for HLS. The superseded `docker/` topology (DR-004) is dead and will be replaced by
-> Aspire-generated compose in the distribution milestone.
+> (`-c copy`) for HLS. The superseded `docker/` topology (DR-004) is dead — **Aspire-generated compose is
+> the shipped deployment** (`./build.sh Compose`), published with each release.
+>
+> **Since the last revision of this file:** query-driven search shipped (#58), the `*arr` instance
+> config UI shipped (#4), local authentication shipped (part of #48), the README was rewritten (#25),
+> and container images + compose now publish on release (#24).
 >
 > **Known gaps (don't assume these exist):**
-> - **Search is not query-driven yet, and the crawl list is hardcoded.** `CrawlOptions.Targets` binds
->   from each agent's `Crawl` config section and falls back to seed shows in `Agents/{Ard,Zdf}/Program.cs`
->   (`extra 3` / `Die Biene Maja` / `heute-show`). So `t=tvsearch` only finds what has already been
->   crawled — an unseeded show returns nothing. **DR-011** makes on-demand resolution the target and
->   demotes the standing list to RSS-feed input; reach-back to Sonarr is an optional pre-warm, not a
->   requirement (DR-010's work-list clause is retracted). No Sonarr/Radarr-instance config UI yet either
->   — `Settings` is download settings only.
-> - `AppSettings.CatalogProviderKey` still defaults to `"mediathekview"`, and
+> - **Search *is* query-driven now (#58, DR-011).** `Application/Indexing/OnDemandResolution.cs`
+>   resolves an uncrawled `t=tvsearch` against the broadcaster live, wired in
+>   `Api/NewznabIndexerApi/Program.cs` and tuned by `Indexing:OnDemandResolution:*`. What remains
+>   config-driven is the **standing crawl list** (`CrawlOptions.Targets`, falling back to seed shows in
+>   `Agents/{Ard,Zdf}/Program.cs`) — that is now **by design**: per DR-011 the standing list is
+>   RSS-feed input, not the search path. Reach-back to Sonarr is an optional pre-warm, not a
+>   requirement (#6; DR-010's work-list clause is retracted).
+> - `AppSettings.CatalogProviderKey` still defaults to `"mediathekview"` (`AppDbContext.cs`), and
 >   `Infrastructure/Catalog/MediathekView` survives from the DR-001 era. **Do not delete it yet** —
 >   per DR-011 the filmliste is the only full-catalog source available, and it is the fallback if
 >   per-show crawling proves too narrow (#49 is on hold).
-> - Auth is a single optional API key (see below); no user/identity model.
-> - `README.md` is **pre-DR-009 and wholly wrong** (describes the dropped role system, SQLite,
->   `Krautwatch.Worker`, the retired `/api/catalog` surface) — issue #25.
+> - **Sonarr has never been proven to actually import.** Every hop before it is demonstrated against a
+>   real Sonarr 4.0.19 (search → grab → NZB accepted → download completes → path resolved). The import
+>   itself needs the Downloader and Sonarr to share a filesystem; compose makes that possible but it has
+>   not been run. See `docs/plans/2026-08-02 - beta readiness.md`.
+> - OIDC is **not** implemented — `Auth:Provider = oidc` is a stub. Local + `none` work (#48).
+> - Subtitles are parsed at crawl time but never persisted or fetched (#20).
 
 ## Architecture (DR-009 — read `docs/architecture/DR-009` before structural changes)
 
@@ -69,11 +77,16 @@ independently testable, and promotable to its own project later. CQRS/A lives *i
 
 ```
 Application/
-├── Catalog/    BrowseCatalog · SearchCatalog · GetEpisodeDetail   (read side for the standalone Web UI)
-├── Crawling/   CrawlShow (Action) · CrawlScheduler (BackgroundService, config-driven targets)
-├── Downloads/  RunDownload · AddDownloadByToken (Actions) · DownloadHandlers · RefreshProxyList · NzbToken
-├── Indexing/   SearchReleases · Release · ReleaseMapper   (Newznab search + RSS read side)
-└── Settings/   SettingsHandlers   (download dir, concurrency, refresh interval)
+├── Auth/       SignIn · SetupToken                              (local admin, first-run setup link)
+├── Catalog/    BrowseCatalog · SearchCatalog · GetEpisodeDetail  (read side for the standalone Web UI)
+├── Crawling/   CrawlShow (Action) · CrawlScheduler (BackgroundService, config-driven standing list → RSS)
+├── Downloads/  RunDownload · AddDownloadByToken · DeleteDownload (Actions) · DownloadHandlers ·
+│               DownloadMessages · RefreshProxyList · ProxyRefreshService · NzbToken
+├── Indexing/   SearchReleases · Release · ReleaseMapper          (Newznab search + RSS read side)
+│               OnDemandResolution (Action + BackgroundService — query-driven search, #58/DR-011)
+│               TvdbShowResolution · ShowMatching · EpisodeCorroboration  (match Sonarr's tvdbid → our shows)
+└── Settings/   SettingsHandlers (download dir, concurrency, refresh interval) · ArrInstances ·
+                TestArrConnection · ShowMappings · RundfunkArrImport
 ```
 
 | | Touches | Runs on | Example |
@@ -135,8 +148,10 @@ Presentation/
 > The pre-DR-010 browser product (`Api/PublicApi` internal JSON API + the old `Web` browse UI) was
 > retired — Sonarr/Radarr drive Krautwatch (DR-010). The current `Web` is a **fresh, purpose-built
 > standalone UI** (Blazor Server, talks to Application in-process) for search / manual download /
-> monitor without an *arr instance. A genuine *arr **config** UI (Sonarr/Radarr instances, apikey) is
-> still future work.
+> monitor without an *arr instance. The *arr **config** UI shipped too (#4): `Settings` manages
+> Sonarr/Radarr instances and their API keys (with a per-row connection test), `Mappings` manages
+> show mappings with export/import and RundfunkArr set import. Pages live in
+> `Web/Components/Pages/` — `Home · Search · Activity · Settings · Mappings · Login · Logout · Setup`.
 
 Each host is an **independently deployable microservice** from day one. **Adding a broadcaster** =
 a new `Application/<Broadcaster>` slice + an Infrastructure HTTP client + a `Presentation/Agents/<Broadcaster>` host.

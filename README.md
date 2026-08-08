@@ -6,14 +6,23 @@ indexer, send grabs to the download client, and Krautwatch pulls the actual stre
 
 Built on .NET 10, Postgres, Wolverine and .NET Aspire.
 
-> **Status: working end-to-end, but early.** The full round-trip is live — per-broadcaster crawler
-> agents build the catalog, the Newznab surface serves it, and the Downloader agent fetches
-> progressive-MP4 or HLS streams (with a German egress proxy for DACH-geo-restricted assets). What is
-> *not* there yet: **Sonarr/Radarr reach-back** (the crawl work-list is still config/hardcoded, not
-> pulled from your `*arr` monitored series — [#6](../../issues/6)), an ***arr instance config UI***
-> ([#4](../../issues/4)), **real authentication** ([#48](../../issues/48)), **subtitles** (the URL is
-> parsed at crawl time but never persisted or fetched — [#20](../../issues/20)) and a **production
-> compose file** ([#24](../../issues/24)).
+> **Status: v0.1.1 — working end-to-end, but early.** The full round-trip is live: a Newznab search
+> resolves against the broadcaster on demand (so an uncrawled show still returns results), Sonarr grabs,
+> our SABnzbd surface accepts the NZB, and the Downloader agent fetches the progressive-MP4 or HLS stream
+> (through a German egress proxy for DACH-geo-restricted assets). There is a Blazor UI for search, manual
+> downloads, `*arr` instances and show mappings, behind a login.
+>
+> Install it from the [latest release](../../releases/latest) — `docker-compose.yaml` and `env.example`
+> ship as release assets, and multi-arch images (amd64 + arm64) are on `ghcr.io/chrison-dev/`.
+>
+> **What is *not* there yet:** **Sonarr's own import step has never been proven** — everything up to it
+> has, against a real Sonarr 4.0.19, but the final hop needs Krautwatch and Sonarr to share a filesystem
+> (see [`KRAUTWATCH_DOWNLOADS`](#the-one-setting-that-matters-krautwatch_downloads)); **OIDC**
+> ([#48](../../issues/48) — local login works, `oidc` is a stub); **subtitles** (the URL is parsed at
+> crawl time but never persisted or fetched — [#20](../../issues/20)); **`*arr` reach-back** to pre-warm
+> the crawl list ([#6](../../issues/6) — optional by design, see DR-011); and a **real download queue**
+> (priority + honouring `MaxConcurrentDownloads` — [#51](../../issues/51)). `*arr` API keys are stored
+> **in plaintext** ([#60](../../issues/60)).
 
 ---
 
@@ -55,7 +64,13 @@ Launch the `Observability` profile to also get Prometheus, Grafana and Loki cont
 ## Deploying with Docker Compose
 
 The compose file is **generated from the same Aspire model the dev fleet runs**, so the deployed
-topology cannot drift from the one that is tested daily. Build the images and render it:
+topology cannot drift from the one that is tested daily.
+
+**To just run it,** take `docker-compose.yaml` + `env.example` from the
+[latest release](../../releases/latest), rename the latter to `.env`, and fill it in — the images it
+references are already published, so there is nothing to build.
+
+**To build your own** (a dev build, or a change you have not released):
 
 ```bash
 ./build.sh Images --image-tag 0.1.0      # six service images
@@ -145,8 +160,12 @@ stays `Daily` and gets `… 2026-07-10 …`. Most German public-TV content is da
 
 ### What gets crawled
 
-The work-list is **not yet pulled from Sonarr** ([#6](../../issues/6)). Each agent binds a `Crawl`
-section, falling back to seed shows (`Extra 3`, `Biene Maja` on ARD/KiKA; `heute-show` on ZDF):
+This is the **standing crawl list**, which feeds the RSS feed — it is *not* what search is limited to.
+Searches resolve on demand ([see below](#what-gets-searched-query-driven-dr-011)), so a show absent from
+this list is still findable; the list exists because RSS-Sync polls with no particular target. Pulling it
+from your `*arr` monitored series is an optional future pre-warm ([#6](../../issues/6)), not a
+requirement. Each agent binds a `Crawl` section, falling back to seed shows (`Extra 3`, `Biene Maja` on
+ARD/KiKA; `heute-show` on ZDF):
 
 ```jsonc
 {
@@ -297,10 +316,12 @@ no extra container; RabbitMQ opt-in for scale-out).
 Each host is an independently deployable microservice. **Adding a broadcaster** = a new Application
 slice + an Infrastructure HTTP client + a `Presentation/Agents/<Broadcaster>` host.
 
-Decision records live in [`docs/architecture/`](docs/architecture/) — **[DR-009](docs/architecture/DR-009-architecture-reset.md)**
-(architecture reset) and **[DR-010](docs/architecture/DR-010-arr-indexer-direction.md)** (the `*arr`
-indexer direction) are the current ones. [`CLAUDE.md`](CLAUDE.md) is the working guide to the layout
-and conventions.
+Decision records live in [`docs/architecture/`](docs/architecture/). The current ones are
+**[DR-009](docs/architecture/DR-009-architecture-reset.md)** (architecture reset),
+**[DR-010](docs/architecture/DR-010-arr-indexer-direction.md)** (the `*arr` indexer direction) and
+**[DR-011](docs/architecture/DR-011-search-driven-indexing.md)** (search-driven indexing, which
+retracts DR-010's clause about the Sonarr monitored list being the crawl work-list).
+[`CLAUDE.md`](CLAUDE.md) is the working guide to the layout and conventions.
 
 ---
 
