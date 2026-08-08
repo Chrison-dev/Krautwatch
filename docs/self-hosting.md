@@ -76,10 +76,12 @@ docker compose up -d
 Sonarr imports by **reading the file the downloader wrote**. So both containers have to see that file, at
 the same path.
 
-> ⚠️ **`KRAUTWATCH_DOWNLOADS` is missing from `env.example`**
-> ([#83](https://github.com/Chrison-dev/Krautwatch/issues/83)). If you do not add it yourself, the
-> downloader silently writes into a `./downloads` folder next to your compose file, and Sonarr will never
-> find anything. Add the line.
+> ⚠️ **On v0.1.1, `KRAUTWATCH_DOWNLOADS` is missing from `env.example`**
+> ([#83](https://github.com/Chrison-dev/Krautwatch/issues/83), fixed for the next release). If your
+> `env.example` does not list it, add the line yourself — otherwise the downloader writes into a
+> `./downloads` folder next to your compose file and Sonarr never finds anything.
+>
+> **Leaving it blank has the same effect as omitting it**, so give it a real path either way.
 
 Set it to a host path, and mount that **same host path into Sonarr at the same container path**:
 

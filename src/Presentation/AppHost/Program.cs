@@ -8,7 +8,24 @@ var builder = DistributedApplication.CreateBuilder(args);
 // Named "compose" rather than "krautwatch": resource names share one case-insensitive
 // namespace, and the database is already called krautwatch.
 var compose = builder.AddDockerComposeEnvironment("compose")
-    .WithDashboard(dashboard => dashboard.WithHostPort(18888));
+    .WithDashboard(dashboard => dashboard.WithHostPort(18888))
+    // The generated .env — and so the released env.example — is built from the environment variables
+    // Aspire *captures*, which means only those it knows about from parameters and image references. The
+    // downloads bind mount is a hand-written interpolation, so it was invisible there: operators filled in
+    // every key the file listed and still ended up writing media next to their compose file, where Sonarr
+    // never looks (#83). Declaring it here puts it in the file, with an explanation attached.
+    .ConfigureEnvFile(variables => variables[DownloadsVariable] = new()
+    {
+        Name = DownloadsVariable,
+        // Spells out the consequence, not just the meaning: left blank this falls back to a folder beside
+        // the compose file, which starts cleanly and then imports nothing — the failure #83 describes.
+        Description =
+            "REQUIRED. Host directory for finished downloads, e.g. /mnt/media/downloads. Mount this SAME "
+            + "host path into Sonarr/Radarr at /downloads too, so both sides agree and no remote-path "
+            + "mapping is needed. Left blank it falls back to " + DownloadsFallback + " beside this file, "
+            + "where your *arr apps will not find anything.",
+        DefaultValue = DownloadsFallback,
+    });
 
 // ──────────────────────────────────────────────────────────────
 // Postgres (DR-009) — Aspire provisions the container + database and injects the
@@ -107,7 +124,10 @@ builder.AddProject<Projects.Krautwatch_Agents_Downloader>("agent-downloader")
         {
             Name = "downloads",
             Type = "bind",
-            Source = "${KRAUTWATCH_DOWNLOADS:-./downloads}",
+            // Fallback retained so an existing deployment that upgrades the compose file without
+            // adding the key to its `.env` still starts. DownloadsVariable is declared in the env-file
+            // configuration below, which is what puts it in front of operators (#83).
+            Source = $"${{{DownloadsVariable}:-{DownloadsFallback}}}",
             Target = "/downloads",
         });
 
@@ -139,3 +159,19 @@ if (builder.Environment.EnvironmentName == "Observability")
 }
 
 builder.Build().Run();
+
+// ──────────────────────────────────────────────────────────────
+// Compose interpolation names, shared between the volume mount that consumes them and the .env
+// declaration that documents them — keeping the two from drifting apart, which is what caused #83.
+// ──────────────────────────────────────────────────────────────
+public partial class Program
+{
+    /// <summary>Host path for finished downloads, surfaced to operators in <c>.env</c>.</summary>
+    internal const string DownloadsVariable = "KRAUTWATCH_DOWNLOADS";
+
+    /// <summary>
+    /// Used when the variable is unset. Deliberately kept: an existing deployment that upgrades the
+    /// compose file without adding the key to its <c>.env</c> must still start.
+    /// </summary>
+    internal const string DownloadsFallback = "./downloads";
+}
