@@ -92,4 +92,56 @@ public class TestArrConnectionHandlerTests
         await repo.DidNotReceive().UpdateAsync(Arg.Any<ArrInstance>(), Arg.Any<CancellationToken>());
         await repo.DidNotReceive().AddAsync(Arg.Any<ArrInstance>(), Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task Testing_an_edit_with_no_key_borrows_the_stored_one()
+    {
+        // #66: the edit form is told "leave blank to keep the current key", so a blank key must test with
+        // the stored key rather than refusing — the operator was never shown it to re-type.
+        var repo = Substitute.For<IArrInstanceRepository>();
+        var client = Substitute.For<IArrClient>();
+        var stored = Instance();
+        repo.GetByIdAsync(stored.Id, Arg.Any<CancellationToken>()).Returns(stored);
+        client.TestConnectionAsync(Arg.Any<ArrInstance>(), Arg.Any<CancellationToken>())
+            .Returns(ArrConnectionResult.Success("Sonarr", "4.0.10"));
+
+        // The form's draft: the URL has been edited, and the key field left blank.
+        var draft = new ArrInstance
+        {
+            Name = stored.Name, Kind = stored.Kind, BaseUrl = "http://sonarr:9999", ApiKey = "",
+        };
+
+        var result = await new TestArrConnectionHandler(repo, client)
+            .HandleAsync(stored.Id, draft, TestContext.Current.CancellationToken);
+
+        result.Ok.ShouldBeTrue();
+
+        // The edited URL is what gets tested — testing the stored record would silently ignore the change.
+        await client.Received(1).TestConnectionAsync(
+            Arg.Is<ArrInstance>(i => i != null && i.BaseUrl == "http://sonarr:9999" && i.ApiKey == "key-abc"),
+            Arg.Any<CancellationToken>());
+
+        // Still a dry run.
+        await repo.DidNotReceive().UpdateAsync(Arg.Any<ArrInstance>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Testing_an_edit_of_a_vanished_instance_reports_it_rather_than_calling_out()
+    {
+        var repo = Substitute.For<IArrInstanceRepository>();
+        var client = Substitute.For<IArrClient>();
+        repo.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((ArrInstance?)null);
+
+        var result = await new TestArrConnectionHandler(repo, client).HandleAsync(
+            Guid.NewGuid(),
+            new ArrInstance { Name = "Sonarr", BaseUrl = "http://sonarr:8989", ApiKey = "" },
+            TestContext.Current.CancellationToken);
+
+        result.Ok.ShouldBeFalse();
+
+        // With no stored key to borrow, calling out would authenticate with an empty string and report a
+        // confusing 401 instead of the real cause.
+        await client.DidNotReceive().TestConnectionAsync(
+            Arg.Any<ArrInstance>(), Arg.Any<CancellationToken>());
+    }
 }

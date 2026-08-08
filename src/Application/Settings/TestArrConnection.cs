@@ -61,4 +61,30 @@ public class TestArrConnectionHandler(IArrInstanceRepository repository, IArrCli
         ArrInstance unsaved,
         CancellationToken ct = default) =>
         ArrConnectionTestResult.From(await client.TestConnectionAsync(unsaved, ct));
+
+    /// <summary>
+    /// Tests unsaved edits to an instance that <em>already exists</em>, filling the API key in from storage.
+    /// Nothing is written — this is still a dry run.
+    /// </summary>
+    /// <remarks>
+    /// The edit form never receives the real key (it is masked on the read model), so a blank key field
+    /// means "keep the stored one". Without this overload the operator would have to re-type a credential
+    /// they were deliberately never shown, just to test a changed URL — the contradiction in #66. Resolving
+    /// the key server-side keeps the masking guarantee intact: it still never reaches the browser.
+    /// </remarks>
+    public async Task<ArrConnectionTestResult> HandleAsync(
+        Guid instanceId,
+        ArrInstance unsaved,
+        CancellationToken ct = default)
+    {
+        var stored = await repository.GetByIdAsync(instanceId, ct);
+        if (stored is null)
+            return ArrConnectionTestResult.NotFound();
+
+        // `unsaved` is a throwaway built from the form, so borrowing the stored credential onto it is safe
+        // — and it keeps the operator's edited URL/name, which testing the stored record would discard.
+        unsaved.ApiKey = stored.ApiKey;
+
+        return ArrConnectionTestResult.From(await client.TestConnectionAsync(unsaved, ct));
+    }
 }

@@ -44,7 +44,15 @@
                         <td class="path small">@i.BaseUrl</td>
                         <td class="small muted">@i.ApiKeyMasked</td>
                         <td class="small">
-                            @if (i.LastTestOk == true)
+                            @if (_rowNotice is { } notice && notice.Id == i.Id)
+                            {
+                                @* Just tested — show the live outcome, including ones that never reach the
+                                   row at all (a deleted instance persists nothing to render). *@
+                                <span class="@(notice.Ok ? "ok" : "error")" role="status">
+                                    @(notice.Ok ? "✓" : "✕") @notice.Message
+                                </span>
+                            }
+                            else if (i.LastTestOk == true)
                             {
                                 <span class="ok">✓ @i.LastTestMessage</span>
                             }
@@ -55,6 +63,10 @@
                             else
                             {
                                 <span class="muted">never tested</span>
+                            }
+                            @if (i.LastTestedAt is { } testedAt)
+                            {
+                                <span class="muted"> · @Relative(testedAt)</span>
                             }
                         </td>
                         <td class="right actions">
@@ -297,6 +309,12 @@
     Guid? _testing;
     bool _testingDraft;
 
+    // Outcome of the most recent per-row test, shown inline on that row.
+    (Guid Id, bool Ok, string Message)? _rowNotice;
+
+    /// <summary>How long the "…" in-flight state is held for, so a fast test still registers visually.</summary>
+    static readonly TimeSpan MinimumVisibleWork = TimeSpan.FromMilliseconds(400);
+
     // Settings form — bound separately so a failed validation doesn't lose the user's edits.
     string _downloadDirectory = "";
     int _maxConcurrent;
@@ -402,17 +420,50 @@
 
     async Task TestAsync(Guid id)
     {
+        _rowNotice = null;
         _testing = id;
+        StateHasChanged();          // paint the in-flight state before blocking on the round-trip
+
         try
         {
             using var scope = Scopes.CreateScope();
-            await scope.ServiceProvider.GetRequiredService<TestArrConnectionHandler>().HandleAsync(id);
+            var test = scope.ServiceProvider.GetRequiredService<TestArrConnectionHandler>().HandleAsync(id);
+
+            // A local *arr answers in a few milliseconds — far too fast for the "…" to ever render, which
+            // is a large part of why this button read as dead (#67). Hold the in-flight state briefly so
+            // the click always visibly registers.
+            await Task.WhenAll(test, Task.Delay(MinimumVisibleWork));
+
+            // Surface the outcome. Previously discarded, which also swallowed NotFound entirely.
+            var result = await test;
+            _rowNotice = (id, result.Ok, result.Message);
+
             await LoadInstancesAsync(); // the outcome is cached on the row
         }
         finally
         {
             _testing = null;
         }
+    }
+
+    /// <summary>
+    /// Renders a timestamp as a coarse "how long ago". Without this a repeat test repaints identical text
+    /// and looks like a no-op, since the message rarely changes between runs (#67).
+    /// </summary>
+    static string Relative(DateTimeOffset when)
+    {
+        var elapsed = DateTimeOffset.UtcNow - when;
+        if (elapsed < TimeSpan.Zero)
+            elapsed = TimeSpan.Zero;    // clock skew between the app and the database
+
+        return elapsed switch
+        {
+            { TotalSeconds: < 10 } => "just now",
+            { TotalMinutes: < 1 }  => $"{(int)elapsed.TotalSeconds}s ago",
+            { TotalHours: < 1 }    => $"{(int)elapsed.TotalMinutes}m ago",
+            { TotalDays: < 1 }     => $"{(int)elapsed.TotalHours}h ago",
+            _                      => $"{(int)elapsed.TotalDays}d ago",
+        };
     }
 
     async Task TestDraftAsync()
@@ -422,10 +473,14 @@
         _instanceNotice = null;
 
         // Testing unsaved details means a wrong key never has to be persisted to discover it is wrong.
-        // Requires an explicit key, since the stored one is never sent to the browser.
-        if (string.IsNullOrWhiteSpace(_editing.ApiKey))
+        var typedKey = !string.IsNullOrWhiteSpace(_editing.ApiKey);
+
+        // Creating: there is no stored key to fall back on, so one genuinely has to be typed. Say why,
+        // rather than just refusing.
+        if (!typedKey && _editing.Id is null)
         {
-            _instanceErrors.Add("Enter the API key to test without saving.");
+            _instanceErrors.Add(
+                "Enter the API key to test — a new instance has no saved key to fall back on.");
             return;
         }
 
@@ -433,9 +488,13 @@
         try
         {
             using var scope = Scopes.CreateScope();
-            var result = await scope.ServiceProvider
-                .GetRequiredService<TestArrConnectionHandler>()
-                .HandleAsync(_editing.ToEntity());
+            var handler = scope.ServiceProvider.GetRequiredService<TestArrConnectionHandler>();
+
+            // Editing with the key left blank means "keep the current key" — exactly what the placeholder
+            // promises — so test with the stored one instead of demanding a re-type (#66).
+            var result = typedKey
+                ? await handler.HandleAsync(_editing.ToEntity())
+                : await handler.HandleAsync(_editing.Id!.Value, _editing.ToEntity());
 
             _instanceNoticeOk = result.Ok;
             _instanceNotice = result.Ok ? $"✓ {result.Message}" : $"✕ {result.Message}";
