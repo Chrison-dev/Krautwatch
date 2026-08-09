@@ -168,3 +168,48 @@ label.radio span { display: flex; flex-direction: column; gap: 2px; color: var(-
 
 button.narrow { width: auto; padding: 8px 16px; }
 tr.disabled td { opacity: 0.45; }
+
+/* ── First-run wizard (#54) ─────────────────────────────────── */
+
+.wizard-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    list-style: none;
+    margin: 0 0 1.25rem;
+    padding: 0;
+    font-size: .85rem;
+}
+
+/* Numbered by counter rather than <ol>'s own marker: the marker and a label both
+   rendered, which read as "1. 1 Database". */
+.wizard-steps { counter-reset: wizard-step; }
+
+.wizard-steps li {
+    counter-increment: wizard-step;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    color: var(--muted, #8b8b8b);
+}
+
+.wizard-steps li::before {
+    content: counter(wizard-step);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    border: 1px solid currentColor;
+    font-size: .75rem;
+}
+
+.wizard-steps li.current { color: var(--accent, #e8b73f); font-weight: 600; }
+.wizard-steps li.done { color: var(--ok, #5bbf7a); }
+.wizard-steps li.done::before { content: "✓"; }
+
+/* Key/value read-only facts, e.g. the database step. */
+dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: .35rem 1.25rem; margin: 1rem 0; }
+dl.kv dt { color: var(--muted, #8b8b8b); }
+dl.kv dd { margin: 0; }
