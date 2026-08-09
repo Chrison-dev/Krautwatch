@@ -13,8 +13,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Fallout.Common" Version="10.4.0-rc.4" />
-    <PackageReference Include="Fallout.Components" Version="10.4.0-rc.4" />
+    <PackageReference Include="Fallout.Common" Version="10.4.0" />
+    <PackageReference Include="Fallout.Components" Version="10.4.0" />
   </ItemGroup>
 
 </Project>

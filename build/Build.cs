@@ -28,12 +28,19 @@ using static Fallout.Common.Tools.DotNet.DotNetTasks;
 //
 // Adding a registry is a third attribute plus an environment holding REGISTRY_USER and
 // REGISTRY_PASSWORD; nothing in the targets changes.
+// The one dispatch input both publish workflows take, declared once and scoped to them. Typed and
+// compile-checked, replacing the untyped OnWorkflowDispatchOptionalInputs arrays this used to carry —
+// misconfiguration now fails generation instead of emitting broken YAML (FALLOUTOBS001).
+[GitHubActionsInput(
+    "ImageTag",
+    Type = GitHubActionsInputType.String,
+    Description = "Image tag to publish. Defaults to the build's own tag resolution when left blank.",
+    Workflows = new[] { "publish-ghcr", "publish-dockerhub" })]
 [GitHubActions(
     "publish-ghcr",
     GitHubActionsImage.UbuntuLatest,
     FetchDepth = 0,
     OnPushTags = new[] { "v*" },
-    OnWorkflowDispatchOptionalInputs = new[] { nameof(ImageTag) },
     // A dedicated target per registry rather than a Registry parameter: the generator does not emit
     // the attribute's Env into the workflow, and a target name states the destination unambiguously.
     InvokedTargets = new[] { nameof(PushGhcr) },
@@ -58,7 +65,6 @@ using static Fallout.Common.Tools.DotNet.DotNetTasks;
     FetchDepth = 0,
     // Deliberately tag-triggered only via dispatch: Docker Hub is a mirror, and mirroring on every
     // tag doubles the blast radius of a bad release for no benefit.
-    OnWorkflowDispatchOptionalInputs = new[] { nameof(ImageTag) },
     InvokedTargets = new[] { nameof(PushDockerHub) },
     EnvironmentName = "dockerhub",
     ImportSecrets = new[] { nameof(RegistryUser), nameof(RegistryPassword) })]
