@@ -6,6 +6,7 @@ using Krautwatch.Infrastructure.Downloads;
 using Krautwatch.Infrastructure.Jobs;
 using Krautwatch.Infrastructure.Persistence;
 using Krautwatch.Infrastructure.Proxies;
+using Krautwatch.Infrastructure.Secrets;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -110,11 +111,32 @@ public class GeoNodeProxyListSourceTests
 
 public class EgressProxyProviderTests
 {
+    /// <summary>
+    /// Builds a provider over configuration only — no settings row, which is also the state of any
+    /// deployment that configured egress before it was editable in the UI (#54).
+    /// </summary>
+    private static EgressProxyProvider Provider(EgressProxyOptions options)
+    {
+        var scopes = Substitute.For<IServiceScopeFactory>();
+        var scope = Substitute.For<IServiceScope>();
+        var services = Substitute.For<IServiceProvider>();
+        scopes.CreateScope().Returns(scope);
+        scope.ServiceProvider.Returns(services);
+        services.GetService(typeof(ISettingsRepository)).Returns((object?)null);
+
+        var source = new EgressSettingsSource(
+            scopes,
+            new SecretResolver(NullLogger<SecretResolver>.Instance),
+            options,
+            NullLogger<EgressSettingsSource>.Instance);
+
+        return new EgressProxyProvider(source, options, scopes);
+    }
+
     [Fact]
     public async Task Byo_proxy_is_offered_when_configured()
     {
-        var opts = new EgressProxyOptions { ProxyUrl = "http://10.0.0.9:3128" };
-        var sut = new EgressProxyProvider(opts, Substitute.For<IServiceScopeFactory>());
+        var sut = Provider(new EgressProxyOptions { ProxyUrl = "http://10.0.0.9:3128" });
 
         (await sut.GetCandidatesAsync(TestContext.Current.CancellationToken)).ShouldBe(["http://10.0.0.9:3128"]);
     }
@@ -122,9 +144,28 @@ public class EgressProxyProviderTests
     [Fact]
     public async Task No_candidates_when_nothing_is_configured()
     {
-        var sut = new EgressProxyProvider(new EgressProxyOptions(), Substitute.For<IServiceScopeFactory>());
+        var sut = Provider(new EgressProxyOptions());
 
         (await sut.GetCandidatesAsync(TestContext.Current.CancellationToken)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_configured_proxy_may_be_a_secret_reference()
+    {
+        // A proxy URL can embed credentials, so it must be storable as a pointer rather than the secret
+        // itself — the resolver from #82 applies here too.
+        Environment.SetEnvironmentVariable("KRAUTWATCH_TEST_DE_PROXY", "http://secret:pass@de:3128");
+        try
+        {
+            var sut = Provider(new EgressProxyOptions { ProxyUrl = "env:KRAUTWATCH_TEST_DE_PROXY" });
+
+            (await sut.GetCandidatesAsync(TestContext.Current.CancellationToken))
+                .ShouldBe(["http://secret:pass@de:3128"]);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("KRAUTWATCH_TEST_DE_PROXY", null);
+        }
     }
 }
 

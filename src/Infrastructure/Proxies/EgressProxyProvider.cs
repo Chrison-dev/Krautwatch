@@ -10,21 +10,29 @@ namespace Krautwatch.Infrastructure.Proxies;
 /// enabled — the ranked public-list rows. A singleton that opens its own scope to reach the scoped
 /// <see cref="IProxyRepository"/>, so it can be injected into the singleton download providers.
 /// </summary>
-public sealed class EgressProxyProvider(EgressProxyOptions options, IServiceScopeFactory scopes)
+public sealed class EgressProxyProvider(
+    EgressSettingsSource settings, EgressProxyOptions options, IServiceScopeFactory scopes)
     : IEgressProxyProvider
 {
     public async Task<IReadOnlyList<string>> GetCandidatesAsync(CancellationToken ct = default)
     {
+        // Read every call rather than at construction: these are editable in the UI now (#54), and this
+        // is a singleton that would otherwise hold whatever was configured at process start.
+        var effective = settings.Current;
+
         var candidates = new List<string>();
 
-        if (!string.IsNullOrWhiteSpace(options.ProxyUrl))
-            candidates.Add(options.ProxyUrl.Trim());
+        if (!string.IsNullOrWhiteSpace(effective.ProxyUrl))
+            candidates.Add(effective.ProxyUrl.Trim());
 
-        if (options.ProxyList.Enabled)
+        if (effective.ProxyListEnabled)
         {
             using var scope = scopes.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<IProxyRepository>();
-            var ranked = await repo.GetRankedAsync(options.ProxyList.Country, options.ProxyList.MaxCandidates, ct);
+            // Country and source URL stay configuration-only: they are tuning knobs for the public list,
+            // not first-run decisions, and nothing in the UI would know what to do with them.
+            var ranked = await repo.GetRankedAsync(
+                options.ProxyList.Country, effective.MaxCandidates, ct);
             candidates.AddRange(ranked.Select(p => p.Url));
         }
 
@@ -33,7 +41,7 @@ public sealed class EgressProxyProvider(EgressProxyOptions options, IServiceScop
 
     public async Task ReportResultAsync(string proxyUrl, bool ok, CancellationToken ct = default)
     {
-        if (!options.ProxyList.Enabled) return; // only list rows have feedback columns to update
+        if (!settings.Current.ProxyListEnabled) return; // only list rows have feedback columns to update
         try
         {
             using var scope = scopes.CreateScope();

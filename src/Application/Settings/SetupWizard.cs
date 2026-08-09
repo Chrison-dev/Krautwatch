@@ -21,11 +21,14 @@ public enum SetupStep
     /// <summary>Download directory and parallelism.</summary>
     Downloads = 3,
 
+    /// <summary>Geo-restricted egress — how DACH-only assets are reached.</summary>
+    Egress = 4,
+
     /// <summary>Sonarr/Radarr instances, plus what to paste back into them.</summary>
-    ArrInstances = 4,
+    ArrInstances = 5,
 
     /// <summary>Summary.</summary>
-    Done = 5,
+    Done = 6,
 }
 
 /// <summary>Where first-run setup stands.</summary>

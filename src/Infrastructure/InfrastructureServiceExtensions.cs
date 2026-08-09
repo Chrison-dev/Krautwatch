@@ -226,6 +226,8 @@ public static class InfrastructureServiceExtensions
     /// </summary>
     public static IServiceCollection AddEgressProxy(this IServiceCollection services)
     {
+        services.AddSecretResolver();                       // the proxy URL may be an env:/file: reference
+        services.AddSingleton<EgressSettingsSource>();      // config-over-database precedence
         services.AddSingleton<IEgressProxyProvider, EgressProxyProvider>();
         return services;
     }

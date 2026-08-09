@@ -33,13 +33,12 @@ builder.Services.AddEgressProxy();                      // geo-restricted egress
 builder.Services.AddScoped<RunDownloadHandler>();       // the Action — needs IDownloadProvider (this host only)
 builder.Services.AddHostedService<DownloadSupervisor>(); // claims + runs Queued jobs, up to MaxConcurrentDownloads
 
-// Mode B (auto public proxy list) — the source + refresh scheduler, only when enabled.
-if (egressOptions.ProxyList.Enabled)
-{
-    builder.Services.AddProxyListSource();               // GeoNode client behind IProxyListSource
-    builder.Services.AddScoped<RefreshProxyListHandler>();
-    builder.Services.AddHostedService<ProxyRefreshService>();
-}
+// Mode B (auto public proxy list) — the source + refresh scheduler. Registered unconditionally: it is
+// switchable from the settings UI now (#54), and gating registration on config meant turning it on in
+// the UI did nothing until someone restarted the container. The service itself stays idle while off.
+builder.Services.AddProxyListSource();               // GeoNode client behind IProxyListSource
+builder.Services.AddScoped<RefreshProxyListHandler>();
+builder.Services.AddHostedService<ProxyRefreshService>();
 
 var app = builder.Build();
 

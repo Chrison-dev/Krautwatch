@@ -1,6 +1,6 @@
 # 2026-08-09 — First-run setup wizard
 
-**Status:** proposed · implements [#54](../../../../issues/54)
+**Status:** ✅ wizard in PR #92; egress step in PR #93 · implements [#54](../../../../issues/54)
 
 #54 was written before several of its dependencies landed. Re-reading it against the code changes the
 shape substantially, so this records what is actually left and how it should be built.
@@ -87,16 +87,22 @@ owns no configuration state of its own.
 - [ ] Tests: gating (token before admin, session after), resume, that finishing stamps the flag, and that
       the root redirect stops once stamped.
 
-### PR 2 — geo-restricted egress step
+### PR 2 — geo-restricted egress step ✅
 
-Deliberately separate, because it is **not** a UI job. `Download:ProxyUrl` and `Download:ProxyList:*`
+Landed in #93. It was **not** a UI job: `Download:ProxyUrl` and `Download:ProxyList:*`
 bind from the **Downloader host's configuration**, not the database — so there is nothing for a UI to
 write. Making that step real means moving egress settings into `AppSettings` and having the Downloader
 read them from there, the way it already does for `DownloadDirectory`.
 
 That is a behavioural change to a security-adjacent path with its own migration and precedence question
-(does config still win over the stored value, as it does for the TVDB key?). It deserves its own review,
+(does config still win over the stored value, as it does for the TVDB key?). It deserved its own review,
 not a corner of a wizard PR.
+
+**Resolved as built:** configuration wins, matching `TvdbApiKeySource`, via a new `EgressSettingsSource`
+with the same TTL-cached, scope-opening shape. The proxy URL goes through `ISecretResolver`, since it can
+embed credentials. `ProxyRefreshService` is now registered unconditionally and re-checks each pass —
+gating registration on config meant enabling Mode B in the UI did nothing until a restart. Country and
+source URL stay config-only: tuning knobs, not first-run decisions.
 
 ### Not now
 
