@@ -87,6 +87,39 @@
                     </div>
                     break;
 
+                case SetupStep.Egress:
+                    <h2>Geo-restricted content</h2>
+                    <p class="muted small">
+                        Some German public-TV assets — KiKA and licensed cartoons especially — are only
+                        reachable from inside the DACH region. Those downloads route through a proxy;
+                        everything else goes direct. Skip this if you are in Germany, Austria or
+                        Switzerland, or if you do not want that content.
+                    </p>
+
+                    <label>
+                        Your own proxy
+                        <input @bind="_egressProxyUrl" type="password" placeholder="http://de-vps:3128" />
+                        <span class="muted small">
+                            Recommended: a German VPS or WireGuard exit you control. May be a secret
+                            reference such as <code>env:DE_PROXY</code>.
+                        </span>
+                    </label>
+
+                    <label class="checkbox">
+                        <input type="checkbox" @bind="_egressListEnabled" />
+                        Also try auto-sourced public proxies
+                    </label>
+                    <span class="muted small">
+                        Best-effort and untrusted — public lists are unreliable and see your traffic.
+                        Only worth it if you have no exit of your own.
+                    </span>
+
+                    <p class="muted small">
+                        Without either, a geo-restricted download fails immediately with a clear message
+                        rather than hanging — so leaving this empty is a safe choice.
+                    </p>
+                    break;
+
                 case SetupStep.ArrInstances:
                     <h2>Sonarr / Radarr</h2>
                     <p class="muted small">
@@ -149,11 +182,13 @@
     [Parameter] public string? Step { get; set; }
 
     static readonly SetupStep[] Steps =
-        [SetupStep.Database, SetupStep.Downloads, SetupStep.ArrInstances, SetupStep.Done];
+        [SetupStep.Database, SetupStep.Downloads, SetupStep.Egress, SetupStep.ArrInstances, SetupStep.Done];
 
     SetupState? _state;
     string _downloadDirectory = "";
     int _maxConcurrent = 2;
+    string _egressProxyUrl = "";
+    bool _egressListEnabled;
     string? _writeCheck;
     bool _writeCheckOk;
     string? _error;
@@ -167,6 +202,7 @@
     {
         SetupStep.Database => "Database",
         SetupStep.Downloads => "Downloads",
+        SetupStep.Egress => "Geo-restricted",
         SetupStep.ArrInstances => "Sonarr / Radarr",
         _ => "Done",
     };
@@ -186,6 +222,7 @@
         var settings = await scope.ServiceProvider.GetRequiredService<GetSettingsHandler>().HandleAsync();
         _downloadDirectory = settings.DownloadDirectory;
         _maxConcurrent = settings.MaxConcurrentDownloads;
+        _egressListEnabled = settings.EgressProxyListEnabled;
     }
 
     void Back() => Go(Steps[Math.Max(0, Array.IndexOf(Steps, Current) - 1)]);
@@ -196,7 +233,7 @@
 
         // Persist as we go, so a wizard abandoned halfway resumes with the answers already given rather
         // than losing them — the reason completion is tracked separately from "an administrator exists".
-        if (Current == SetupStep.Downloads && !await SaveDownloadsAsync())
+        if (Current is SetupStep.Downloads or SetupStep.Egress && !await SaveDownloadsAsync())
             return;
 
         Go(Steps[Math.Min(Steps.Length - 1, Array.IndexOf(Steps, Current) + 1)]);
@@ -214,7 +251,11 @@
             _maxConcurrent,
             current.CatalogRefreshIntervalHours,
             current.SearchWaitMode,
-            current.SearchWaitSeconds);
+            current.SearchWaitSeconds,
+            TvdbApiKey: null,
+            EgressProxyUrl: _egressProxyUrl,
+            EgressProxyListEnabled: _egressListEnabled,
+            EgressProxyListMaxCandidates: current.EgressProxyListMaxCandidates);
 
         var validation = new SaveSettingsRequestValidator().Validate(request);
         if (!validation.IsValid)

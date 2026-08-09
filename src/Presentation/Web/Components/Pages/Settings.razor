@@ -210,6 +210,51 @@
     }
 </section>
 
+@* ── Geo-restricted egress ─────────────────────────────────── *@
+<section class="panel">
+    <h2>Geo-restricted content</h2>
+    <p class="muted small">
+        Some assets — KiKA, licensed cartoons — are only reachable from inside the DACH region. Those
+        downloads route through a proxy; everything else goes direct. Without one configured, a
+        geo-restricted download fails fast with a clear message rather than hanging.
+    </p>
+
+    @if (_settings is not null)
+    {
+        <p class="muted small">
+            If <code>Download__ProxyUrl</code> is set on the <strong>downloader</strong> service, that
+            wins over whatever is saved here. This page cannot see the downloader's environment, so it
+            will not tell you which one is in force — check the downloader's logs if in doubt.
+        </p>
+
+        <label>
+            Your own proxy
+            <input @bind="_egressProxyUrl" type="password" placeholder="@EgressPlaceholder" />
+            <span class="muted small">
+                Recommended: your own German VPS or WireGuard exit. May be a secret reference such as
+                <code>env:DE_PROXY</code>. Enter <code>-</code> to clear it.
+            </span>
+        </label>
+
+        <label class="checkbox">
+            <input type="checkbox" @bind="_egressListEnabled" />
+            Also try auto-sourced public proxies
+        </label>
+        <span class="muted small">
+            Best-effort and untrusted — public lists are unreliable and see your traffic. Use only if you
+            have no exit of your own.
+        </span>
+
+        @if (_egressListEnabled)
+        {
+            <label>
+                Candidates per download
+                <input type="number" min="1" max="25" @bind="_egressMaxCandidates" />
+            </label>
+        }
+    }
+</section>
+
 @* ── TheTVDB ───────────────────────────────────────────────── *@
 <section class="panel">
     <h2>TheTVDB</h2>
@@ -338,6 +383,12 @@
     SearchWaitMode _waitMode;
     int _waitSeconds;
     string _tvdbApiKey = "";
+    string _egressProxyUrl = "";
+    bool _egressListEnabled;
+    int _egressMaxCandidates = 5;
+
+    string EgressPlaceholder =>
+        string.IsNullOrEmpty(_settings?.EgressProxyUrlMasked) ? "http://de-vps:3128" : _settings.EgressProxyUrlMasked;
     readonly List<string> _settingsErrors = [];
     string? _settingsNotice;
 
@@ -370,6 +421,9 @@
         _waitMode = _settings.SearchWaitMode;
         _waitSeconds = _settings.SearchWaitSeconds;
         _tvdbApiKey = "";   // never pre-fill a credential field
+        _egressProxyUrl = "";
+        _egressListEnabled = _settings.EgressProxyListEnabled;
+        _egressMaxCandidates = _settings.EgressProxyListMaxCandidates;
     }
 
     void AddNew()
@@ -527,7 +581,8 @@
         _settingsNotice = null;
 
         var request = new SaveSettingsRequest(
-            _downloadDirectory, _maxConcurrent, _refreshHours, _waitMode, _waitSeconds, _tvdbApiKey);
+            _downloadDirectory, _maxConcurrent, _refreshHours, _waitMode, _waitSeconds, _tvdbApiKey,
+            _egressProxyUrl, _egressListEnabled, _egressMaxCandidates);
 
         var validation = new SaveSettingsRequestValidator().Validate(request);
         if (!validation.IsValid)
@@ -540,6 +595,7 @@
         _settings = await scope.ServiceProvider
             .GetRequiredService<SaveSettingsHandler>().HandleAsync(request);
         _tvdbApiKey = "";   // clear the credential field so it is not resubmitted on the next save
+        _egressProxyUrl = "";
         _settingsNotice = "Settings saved.";
     }
 

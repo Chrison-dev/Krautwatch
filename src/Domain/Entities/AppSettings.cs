@@ -23,6 +23,22 @@ public class AppSettings
     /// </remarks>
     public DateTimeOffset? SetupCompletedAt { get; set; }
 
+    // ── Geo-restricted egress (#45, #54) ──────────────────────────────────
+    // Moved here from the Downloader host's configuration so first-run setup and the settings page can
+    // reach them at all. Configuration still wins where it is set — see EgressSettingsSource.
+
+    /// <summary>
+    /// Bring-your-own egress proxy for DACH-geo-restricted downloads. May be a secret reference
+    /// (<c>env:</c>/<c>file:</c>), since a proxy URL can embed credentials.
+    /// </summary>
+    public string? EgressProxyUrl { get; set; }
+
+    /// <summary>Opt-in: also try proxies auto-sourced from a public list. Best-effort and untrusted.</summary>
+    public bool EgressProxyListEnabled { get; set; }
+
+    /// <summary>How many ranked public-list candidates to offer per geo-restricted download.</summary>
+    public int EgressProxyListMaxCandidates { get; set; } = 5;
+
     /// <summary>
     /// What a search should do when the show has not been crawled yet (#58). Defaults to
     /// <see cref="SearchWaitMode.ReturnFast"/>, because Sonarr treats a slow indexer as a broken one.
