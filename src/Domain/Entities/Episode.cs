@@ -21,6 +21,12 @@ public class Episode
     /// </summary>
     public bool GeoRestricted { get; init; }
 
+    /// <summary>
+    /// WebVTT subtitle track published alongside the video, or null where the broadcaster offers none
+    /// (#20). Persisted at crawl time and fetched as a sidecar when the episode is downloaded.
+    /// </summary>
+    public string? SubtitleUrl { get; init; }
+
     // Sonarr numbering model — populated when the broadcaster exposes it; null for pure Daily
     // (air-date-matched) content. BroadcastDate is the air-date key for the Daily regime.
     public int? SeasonNumber { get; init; }

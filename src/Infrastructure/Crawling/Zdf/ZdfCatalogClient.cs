@@ -7,7 +7,8 @@ public sealed record ZdfEpisode(string Title, string Query, DateTimeOffset? Edit
 
 /// <summary>A resolved progressive stream (MP4). <paramref name="GeoRestricted"/> reflects the PTMD
 /// <c>attributes.geoLocation</c> (anything other than "none" = in-region-only, e.g. "dach"/"de") (#45).</summary>
-public sealed record ZdfStream(string Quality, string MimeType, string Url, bool GeoRestricted = false);
+public sealed record ZdfStream(
+    string Quality, string MimeType, string Url, bool GeoRestricted = false, string? SubtitleUrl = null);
 
 /// <summary>
 /// Reads the ZDF Mediathek API. Search is the REST <c>/search/documents?q=</c> endpoint
@@ -103,7 +104,9 @@ public sealed class ZdfCatalogClient(HttpClient http)
                 }
             }
         }
-        return best is null ? null : best with { GeoRestricted = geoRestricted };
+        return best is null
+            ? null
+            : best with { GeoRestricted = geoRestricted, SubtitleUrl = FindWebVtt(ptmd.RootElement) };
     }
 
     /// <summary>Fetch a single ZDF episode's full program data (doc metadata + resolved progressive MP4).</summary>
@@ -127,8 +130,43 @@ public sealed class ZdfCatalogClient(HttpClient http)
 
         var stream = await ResolveBestMp4Async(episode.Canonical, ct);
 
-        return new EpisodeDetail(title, show, "ZDF", airDate, duration, synopsis, stream?.Url, SubtitleUrl: null,
+        return new EpisodeDetail(title, show, "ZDF", airDate, duration, synopsis, stream?.Url,
+            SubtitleUrl: stream?.SubtitleUrl,
             GeoRestricted: stream?.GeoRestricted ?? false);
+    }
+
+    /// <summary>
+    /// Picks the WebVTT caption track from a PTMD document (#20). ZDF publishes each caption in several
+    /// formats — typically EBU-TT-D XML alongside WebVTT — and only WebVTT is useful as a sidecar for
+    /// Sonarr, Plex and Jellyfin.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately lenient about how the format is spelled: matching on the declared format <em>or</em> a
+    /// <c>.vtt</c> URI means a rename on ZDF's side degrades to "no subtitles", never to writing an XML
+    /// file named <c>.vtt</c>. Verified against the live API by <c>Live.Tests</c>.
+    /// </remarks>
+    internal static string? FindWebVtt(JsonElement ptmdRoot)
+    {
+        if (!ptmdRoot.TryGetProperty("captions", out var captions)
+            || captions.ValueKind != JsonValueKind.Array)
+            return null;
+
+        string? fallback = null;
+
+        foreach (var caption in captions.EnumerateArray())
+        {
+            var uri = Str(caption, "uri");
+            if (string.IsNullOrWhiteSpace(uri)) continue;
+
+            var format = Str(caption, "format") ?? "";
+            if (format.Contains("webvtt", StringComparison.OrdinalIgnoreCase))
+                return uri;
+
+            if (uri.Contains(".vtt", StringComparison.OrdinalIgnoreCase))
+                fallback ??= uri;
+        }
+
+        return fallback;
     }
 
     private static string? FindPtmdTemplate(JsonElement root)

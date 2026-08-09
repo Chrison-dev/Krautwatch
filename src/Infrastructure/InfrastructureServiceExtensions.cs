@@ -216,6 +216,7 @@ public static class InfrastructureServiceExtensions
         services.AddSingleton<RawMp4DownloadProvider>();
         services.AddSingleton<FfmpegDownloadProvider>();
         services.AddSingleton<IDownloadProvider, DownloadDispatcher>();
+        services.AddSingleton<ISubtitleFetcher, HttpSubtitleFetcher>();   // #20 — sidecar alongside the video
         return services;
     }
 

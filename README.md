@@ -6,11 +6,14 @@ indexer, send grabs to the download client, and Krautwatch pulls the actual stre
 
 Built on .NET 10, Postgres, Wolverine and .NET Aspire.
 
-> **Status: v0.1.1 — working end-to-end, but early.** The full round-trip is live: a Newznab search
+> **Status: v0.2.1 — working end-to-end, but early.** The full round-trip is live: a Newznab search
 > resolves against the broadcaster on demand (so an uncrawled show still returns results), Sonarr grabs,
 > our SABnzbd surface accepts the NZB, and the Downloader agent fetches the progressive-MP4 or HLS stream
 > (through a German egress proxy for DACH-geo-restricted assets). There is a Blazor UI for search, manual
 > downloads, `*arr` instances and show mappings, behind a login.
+>
+> A first run walks you through setup: create an administrator, point downloads somewhere your `*arr`
+> apps can see, and wire up geo-restricted egress.
 >
 > Install it from the [latest release](../../releases/latest) — `docker-compose.yaml` and `env.example`
 > ship as release assets, and multi-arch images (amd64 + arm64) are on `ghcr.io/chrison-dev/`.
@@ -18,11 +21,11 @@ Built on .NET 10, Postgres, Wolverine and .NET Aspire.
 > **What is *not* there yet:** **Sonarr's own import step has never been proven** — everything up to it
 > has, against a real Sonarr 4.0.19, but the final hop needs Krautwatch and Sonarr to share a filesystem
 > (see [`KRAUTWATCH_DOWNLOADS`](#the-one-setting-that-matters-krautwatch_downloads)); **OIDC**
-> ([#48](../../issues/48) — local login works, `oidc` is a stub); **subtitles** (the URL is parsed at
-> crawl time but never persisted or fetched — [#20](../../issues/20)); **`*arr` reach-back** to pre-warm
-> the crawl list ([#6](../../issues/6) — optional by design, see DR-011); and a **real download queue**
-> (priority + honouring `MaxConcurrentDownloads` — [#51](../../issues/51)). `*arr` API keys are stored
-> **in plaintext** ([#60](../../issues/60)).
+> ([#48](../../issues/48) — local login works, `oidc` is a stub); and **`*arr` reach-back** to pre-warm
+> the crawl list ([#6](../../issues/6) — optional by design, see DR-011).
+>
+> Credentials you enter can be kept out of the database entirely as
+> [secret references](#keeping-secrets-out-of-the-database); stored literally, they are plain text.
 
 ---
 
@@ -74,9 +77,9 @@ topology cannot drift from the one that is tested daily.
 [latest release](../../releases/latest), rename the latter to `.env`, and fill it in — the images it
 references are already published, so there is nothing to build.
 
-> ⚠️ **Set `KRAUTWATCH_DOWNLOADS` to a real path.** On v0.1.1 it is missing from `env.example` entirely
-> ([#83](../../issues/83), fixed for the next release) — and blank behaves the same as absent, so either
-> way downloads land in `./downloads` next to the compose file where Sonarr will not find them.
+> ⚠️ **Set `KRAUTWATCH_DOWNLOADS` to a real path.** Blank behaves the same as absent, and either way
+> downloads land in `./downloads` next to the compose file, where Sonarr will not find them. (On v0.1.1
+> and earlier the key is missing from `env.example` altogether — [#83](../../issues/83); add it by hand.)
 
 **To build your own** (a dev build, or a change you have not released):
 

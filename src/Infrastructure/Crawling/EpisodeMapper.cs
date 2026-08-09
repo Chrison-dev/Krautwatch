@@ -52,6 +52,7 @@ internal static class EpisodeMapper
             SeasonNumber = season,
             EpisodeNumber = number,
             GeoRestricted = detail.GeoRestricted,
+            SubtitleUrl = detail.SubtitleUrl,
         };
 
         if (!string.IsNullOrWhiteSpace(detail.StreamUrl))
