@@ -47,10 +47,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > - **Sonarr's import is proven** (2026-08-09, against released v0.2.1 images and Sonarr 4.0.19.2979):
 >   grab → download → queue → match → `downloadFolderImported`, with the library file in place and
 >   `/downloads` cleaned up. Evidence in `docs/plans/2026-08-02 - beta readiness.md`.
-> - **But a fresh install still cannot reproduce it unaided.** Two blockers found during that proof:
->   **#95** — a *daily* series cannot be searched at all (Sonarr sends the air date as `season`/`ep`;
->   our filter drops every dated episode, which is most German public TV); and **#96** — the SABnzbd
->   surface lives at `/sabnzbd/api`, so the download client cannot be added by following our own docs.
+> - Two blockers found during that proof are fixed: **#95** (a daily series could not be searched —
+>   Sonarr sends the air date as `season`/`ep`, and `ep` bound as an int returned HTTP 400) and **#96**
+>   (the SABnzbd surface answered only at `/sabnzbd/api`). `/api` now serves both, dispatching on
+>   `mode=` versus `t=`.
 > - OIDC is **not** implemented — `Auth:Provider = oidc` is a stub. Local + `none` work (#48).
 > - Subtitles ship (#20): parsed from ARD and ZDF, persisted on `Episode.SubtitleUrl`, and fetched
 >   by the Downloader as `{video}.de.vtt`. Best-effort — a missing subtitle never fails the video.

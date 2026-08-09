@@ -3,15 +3,11 @@
 Step by step, for a NAS, a home server or a Pi. Assumes you already run Sonarr or Radarr and know your
 way around `docker compose`.
 
-> **Read this first — two known setup blockers.** The full round trip *is* proven, including Sonarr's
-> import, against released images and a real Sonarr 4.0.19. But two open bugs will stop you following
-> this guide verbatim:
->
-> - **[#96](https://github.com/Chrison-dev/Krautwatch/issues/96)** — set the SABnzbd client's **URL Base
->   to `/sabnzbd`**, or it cannot be added at all. Noted again in §5.
-> - **[#95](https://github.com/Chrison-dev/Krautwatch/issues/95)** — Sonarr cannot search a **daily**
->   series, which is most German public TV. Shows with real `SxxExx` numbering work. Until this is fixed,
->   dated shows have to be downloaded from Krautwatch's own UI.
+> **Read this first.** The full round trip is proven, including Sonarr's import, against a real Sonarr
+> 4.0.19 — search, grab, download, import, library. Both blockers found while proving it
+> ([#95](https://github.com/Chrison-dev/Krautwatch/issues/95),
+> [#96](https://github.com/Chrison-dev/Krautwatch/issues/96)) are fixed; if you are on **v0.2.1 or
+> earlier** you still need the workarounds noted in those issues.
 
 ---
 
@@ -152,7 +148,7 @@ Point both at the **`newznab`** service on port `5055` — not the web UI.
 | Field | Value |
 |---|---|
 | Host / Port | `<host>` / `5055` |
-| **URL Base** | **`/sabnzbd`** — required ([#96](https://github.com/Chrison-dev/Krautwatch/issues/96)); leaving it blank fails the connection test |
+| URL Base | leave blank (`/sabnzbd` also works, if a reverse proxy needs a distinct subpath) |
 | API Key | your `KRAUTWATCH_APIKEY` |
 | Category | `tv` |
 
