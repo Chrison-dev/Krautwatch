@@ -23,6 +23,12 @@ public interface IDownloadJobRepository
     /// </summary>
     Task<int> ReclaimStaleAsync(string workerId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Queued jobs in the order they will actually run — priority first, then first-come. This is the
+    /// order the queue UI shows and the order reordering operates on.
+    /// </summary>
+    Task<IReadOnlyList<DownloadJob>> GetQueuedOrderedAsync(CancellationToken ct = default);
+
     Task AddAsync(DownloadJob job, CancellationToken ct = default);
     Task UpdateAsync(DownloadJob job, CancellationToken ct = default);
     Task DeleteAsync(Guid id, CancellationToken ct = default);

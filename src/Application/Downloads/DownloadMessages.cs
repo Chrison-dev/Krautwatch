@@ -34,4 +34,5 @@ public record DownloadJobResponse(
     DateTimeOffset? CompletedAt,
     bool Active,            // true while pre-terminal — splits the SABnzbd queue from history
     bool GeoRestricted,     // DACH-only asset — fetched via egress proxy (#45)
-    string? ReleaseName);   // the *arr release title, when grabbed by one — see DownloadJob.ReleaseName
+    string? ReleaseName,    // the *arr release title, when grabbed by one — see DownloadJob.ReleaseName
+    int Priority = 0);      // queue priority, higher runs sooner (#51)

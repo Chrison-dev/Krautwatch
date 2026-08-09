@@ -41,7 +41,10 @@ public class DownloadJobRepository(AppDbContext db) : IDownloadJobRepository
         {
             var candidateId = await db.DownloadJobs
                 .Where(j => j.Status == DownloadStatus.Queued)
-                .OrderBy(j => j.CreatedAt)
+                // Priority first (higher runs sooner), then plain first-come. Everything defaults to 0,
+                // so a queue nobody has reordered behaves exactly as it always did.
+                .OrderByDescending(j => j.Priority)
+                .ThenBy(j => j.CreatedAt)
                 .Select(j => j.Id)
                 .FirstOrDefaultAsync(ct);
             if (candidateId == Guid.Empty) return null;
@@ -58,6 +61,13 @@ public class DownloadJobRepository(AppDbContext db) : IDownloadJobRepository
         }
         return null;
     }
+
+    public async Task<IReadOnlyList<DownloadJob>> GetQueuedOrderedAsync(CancellationToken ct = default) =>
+        await db.DownloadJobs
+            .Where(j => j.Status == DownloadStatus.Queued)
+            .OrderByDescending(j => j.Priority)
+            .ThenBy(j => j.CreatedAt)
+            .ToListAsync(ct);
 
     public async Task<int> ReclaimStaleAsync(string workerId, CancellationToken ct = default) =>
         await db.DownloadJobs

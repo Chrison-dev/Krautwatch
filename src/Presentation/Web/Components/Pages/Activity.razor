@@ -9,6 +9,11 @@
 
 <h1>Activity</h1>
 
+@if (_notice is not null)
+{
+    <p class="error" role="status">@_notice</p>
+}
+
 @if (_jobs is null)
 {
     <p class="muted">Loading…</p>
@@ -54,6 +59,19 @@ else
                     </td>
                     <td class="path muted small">@(j.OutputPath ?? j.ErrorMessage ?? "")</td>
                     <td class="right actions">
+                        @* Only queued jobs can be reordered, and only when there is something to move
+                           past — a control that cannot change anything should not be offered. *@
+                        @if (j.Status == "Queued" && _queuedCount > 1)
+                        {
+                            <button class="icon-btn" title="Move to top of queue"
+                                    @onclick="() => ReorderAsync(j.JobId, QueueMove.ToTop)">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                            </button>
+                            <button class="icon-btn" title="Move to bottom of queue"
+                                    @onclick="() => ReorderAsync(j.JobId, QueueMove.ToBottom)">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+                            </button>
+                        }
                         @if (j.Active)
                         {
                             <button class="icon-btn danger" title="Cancel download" @onclick="() => CancelAsync(j.JobId)">
@@ -83,6 +101,12 @@ else
     IReadOnlyList<DownloadJobResponse>? _jobs;
     PeriodicTimer? _timer;
 
+    // Reorder controls only appear when there is more than one queued job to move between.
+    int _queuedCount;
+
+    // Set when a reorder is refused — e.g. the job started downloading before the click landed.
+    string? _notice;
+
     protected override async Task OnInitializedAsync()
     {
         await RefreshAsync();
@@ -108,6 +132,20 @@ else
         using var scope = Scopes.CreateScope();
         var handler = scope.ServiceProvider.GetRequiredService<GetDownloadQueueHandler>();
         _jobs = await handler.HandleAsync();
+        _queuedCount = _jobs.Count(j => j.Status == "Queued");
+    }
+
+    // Move a queued job to the top or bottom of the queue (#51). The handler refuses anything no longer
+    // queued — which the 3s poll makes reachable: a job can start downloading between render and click.
+    async Task ReorderAsync(Guid jobId, QueueMove move)
+    {
+        _notice = null;
+        using var scope = Scopes.CreateScope();
+        var result = await scope.ServiceProvider
+            .GetRequiredService<ReorderDownloadHandler>().HandleAsync(jobId, move);
+
+        if (!result.Ok) _notice = result.Problem;
+        await RefreshAsync();
     }
 
     // Re-queue a failed job (a fresh attempt runs) and drop the old failed row so the list stays tidy.

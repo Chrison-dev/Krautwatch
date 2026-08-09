@@ -26,9 +26,15 @@ public class AddDownloadByTokenHandler(
     /// The release title the `*arr` app grabbed, when known. Carried onto the job so the download client
     /// surface and the file on disk both use the name Sonarr expects to parse.
     /// </param>
+    /// <param name="priority">
+    /// Queue priority from the grabbing client (#51). Sonarr marks an interactive grab higher than an
+    /// RSS-Sync one, so honouring it is what stops a manual grab being buried behind a season pack
+    /// enqueued moments earlier.
+    /// </param>
     public async Task<Guid?> HandleAsync(
         string token,
         string? releaseName = null,
+        int priority = 0,
         CancellationToken ct = default)
     {
         var parsed = ReleaseToken.Parse(token);
@@ -51,6 +57,11 @@ public class AddDownloadByTokenHandler(
             GeoRestricted = episode.GeoRestricted,
             ReleaseName   = string.IsNullOrWhiteSpace(releaseName) ? null : releaseName.Trim(),
         };
+
+        // After construction rather than in the initialiser: Priority is settable only through the guard
+        // that refuses to reorder a job which is no longer queued. A brand-new job always is.
+        if (priority != 0)
+            job.SetPriority(priority);
 
         await jobs.AddAsync(job, ct);
         await queue.EnqueueAsync(job.Id, stream.Url, ct);

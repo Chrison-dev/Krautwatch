@@ -1,6 +1,6 @@
 # 2026-08-09 — Download queue: concurrency and priority
 
-**Status:** proposed · implements [#51](../../../../issues/51)
+**Status:** ✅ implemented — concurrency in PR #89, priority in PR #90 · implements [#51](../../../../issues/51)
 
 #51 describes two independent gaps. They ship as **two PRs**, in this order:
 
@@ -18,15 +18,24 @@ Rejected explicit `QueuePosition` because every reorder would have to renumber i
 per move, and two concurrent enqueues can race into the same position. Sparse priority makes each move a
 **single-row write**:
 
+Higher runs sooner, so:
+
 | Action | Write |
 |---|---|
-| Move to top | `Priority = min(queued priority) - 1` |
-| Move to bottom | `Priority = max(queued priority) + 1` |
-| Move up / down | swap `Priority` with the adjacent queued job |
+| Move to top | `Priority = max(queued priority) + 1` |
+| Move to bottom | `Priority = min(queued priority) - 1` |
 
 The cost is that there is no stable "this is job #3" number to show. #51 only requires move-to-top and
 move-to-bottom as a minimum, and a queue ordered visually top-to-bottom communicates position perfectly
 well without one.
+
+**Move up / down is deliberately not implemented.** A single-step move cannot be expressed as a one-row
+write over sparse priorities: when neighbours share a priority — which is the normal case, since
+everything starts at `0` and ties break on `CreatedAt` — raising a job above one of them raises it above
+*all* of them. Doing it properly needs either renumbering the whole queued list on every move or
+fractional priorities, and neither is worth it for the complaint #51 actually describes: a manual grab
+buried behind an RSS-Sync season pack, which move-to-top solves exactly. Worth revisiting only if
+someone asks for finer control.
 
 Existing rows default to `0`, so today's pure-`CreatedAt` order is preserved exactly.
 
@@ -91,19 +100,21 @@ priority, and pretending `-2` pauses something would be a worse lie than the one
 ## Scope
 
 **PR 1 — concurrency**
-- [ ] Supervisor loop in `Agents/Downloader/DownloadWorker.cs`, own scope per job.
-- [ ] Read `MaxConcurrentDownloads` from settings each pass, clamped to a sane floor of 1.
-- [ ] Say "per process" where the setting is edited.
-- [ ] Tests: N runs concurrently; a raised/lowered limit is picked up; one failing job does not stop the
+- [x] Supervisor loop, own scope per job. Landed in `Application/Downloads/DownloadSupervisor.cs`
+      rather than the agent host — that is where the other BackgroundServices live, and no test project
+      references the agent hosts.
+- [x] Read `MaxConcurrentDownloads` from settings each pass, clamped to a sane floor of 1.
+- [x] Say "per process" where the setting is edited.
+- [x] Tests: N runs concurrently; a raised/lowered limit is picked up; one failing job does not stop the
       supervisor or the others.
 
 **PR 2 — priority**
-- [ ] `Priority` on `DownloadJob` + EF migration defaulting to `0`.
-- [ ] Claim orders by `Priority` descending then `CreatedAt`; index to match.
-- [ ] Reorder use-cases in `Application/Downloads` (top / bottom / up / down), `Queued` jobs only.
-- [ ] Controls on `Activity.razor`.
-- [ ] SABnzbd: accept incoming priority on add, report the real value in `queue`.
-- [ ] Tests: ordering, reorder operations, that a non-`Queued` job cannot be reordered.
+- [x] `Priority` on `DownloadJob` + EF migration defaulting to `0`.
+- [x] Claim orders by `Priority` descending then `CreatedAt`; index to match.
+- [x] Reorder use-cases in `Application/Downloads` (top / bottom), `Queued` jobs only.
+- [x] Controls on `Activity.razor`.
+- [x] SABnzbd: accept incoming priority on add, report the real value in `queue`.
+- [x] Tests: ordering, reorder operations, that a non-`Queued` job cannot be reordered.
 
 ## Out of scope
 

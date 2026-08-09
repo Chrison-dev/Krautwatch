@@ -72,12 +72,13 @@ public static class SabnzbdEndpoints
 
             case "addfile":
                 var uploaded = await ReadUploadedNzbAsync(http, ct);
-                return await AddAsync(add, uploaded.Token, uploaded.ReleaseName, ct);
+                return await AddAsync(add, uploaded.Token, uploaded.ReleaseName, query["priority"], ct);
 
             case "addurl":
                 // Sonarr uses addfile; addurl remains for clients that fetch the NZB themselves, where the
                 // release name rides in the URL we published.
-                return await AddAsync(add, TokenFromUrl(query["name"]), NameFromUrl(query["name"]), ct);
+                return await AddAsync(
+                    add, TokenFromUrl(query["name"]), NameFromUrl(query["name"]), query["priority"], ct);
 
             case "queue":
                 if (IsDelete(query))
@@ -101,12 +102,19 @@ public static class SabnzbdEndpoints
         string.Equals(query["name"], "delete", StringComparison.OrdinalIgnoreCase);
 
     private static async Task<IResult> AddAsync(
-        AddDownloadByTokenHandler add, string? token, string? releaseName, CancellationToken ct)
+        AddDownloadByTokenHandler add,
+        string? token,
+        string? releaseName,
+        string? sabPriority,
+        CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(token))
             return Results.Json(new { status = false, error = "No download token." });
 
-        var jobId = await add.HandleAsync(token, releaseName, ct);
+        // Sonarr sends a higher priority for an interactive grab than for an RSS-Sync one, so honouring
+        // it is what keeps a manual grab from queueing behind a season pack (#51).
+        var jobId = await add.HandleAsync(
+            token, releaseName, SabnzbdPriority.ToJobPriority(sabPriority), ct);
         return jobId is null
             ? Results.Json(new { status = false, error = "Unknown release." })
             : Results.Json(new { status = true, nzo_ids = new[] { jobId.Value.ToString() } });
@@ -173,7 +181,7 @@ public static class SabnzbdEndpoints
             mb         = Megabytes(j.FileSizeBytes),
             mbleft     = "0",
             timeleft   = "0:00:00",
-            priority   = "Normal",
+            priority   = SabnzbdPriority.ToDisplayName(j.Priority),
             index      = i,
         }).ToList();
     }

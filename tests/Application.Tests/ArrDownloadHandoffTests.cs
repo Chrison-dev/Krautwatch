@@ -39,7 +39,7 @@ public class ArrDownloadHandoffTests
     public async Task The_release_name_is_carried_onto_the_job()
     {
         await Handler().HandleAsync(
-            new ReleaseToken("zdf:1", 234791).Encode(), Release, TestContext.Current.CancellationToken);
+            new ReleaseToken("zdf:1", 234791).Encode(), Release, ct: TestContext.Current.CancellationToken);
 
         await _jobs.Received(1).AddAsync(
             Arg.Is<DownloadJob>(j => j != null && j.ReleaseName == Release), Arg.Any<CancellationToken>());
@@ -60,7 +60,7 @@ public class ArrDownloadHandoffTests
     [InlineData("   ")]
     public async Task A_blank_release_name_is_stored_as_null(string releaseName)
     {
-        await Handler().HandleAsync("zdf:1", releaseName, TestContext.Current.CancellationToken);
+        await Handler().HandleAsync("zdf:1", releaseName, ct: TestContext.Current.CancellationToken);
 
         await _jobs.Received(1).AddAsync(
             Arg.Is<DownloadJob>(j => j != null && j.ReleaseName == null), Arg.Any<CancellationToken>());

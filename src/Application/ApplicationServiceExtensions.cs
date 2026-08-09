@@ -29,6 +29,7 @@ public static class ApplicationServiceExtensions
         services.AddScoped<CancelDownloadHandler>();
         services.AddScoped<RetryDownloadHandler>();
         services.AddScoped<DeleteDownloadHandler>();
+        services.AddScoped<ReorderDownloadHandler>();
         services.AddScoped<GetDownloadQueueHandler>();
         services.AddScoped<GetDownloadJobHandler>();
 
