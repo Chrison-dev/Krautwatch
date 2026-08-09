@@ -159,6 +159,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasIndex(x => x.Status);
             e.HasIndex(x => x.CreatedAt);
 
+            // Matches the claim query exactly (Status filter, then Priority desc, CreatedAt asc), which
+            // every downloader runs on a loop — and now runs N times over as concurrency went up.
+            e.HasIndex(x => new { x.Status, x.Priority, x.CreatedAt })
+                .HasDatabaseName("IX_DownloadJobs_Queue");
+
             // Phase-tracking columns
             e.Property(x => x.StreamType).HasMaxLength(10);
             e.Property(x => x.TempPath).HasMaxLength(1000);

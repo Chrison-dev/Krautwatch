@@ -37,6 +37,18 @@ public class DownloadJob
 
     public DownloadStatus Status { get; private set; } = DownloadStatus.Queued;
 
+    /// <summary>
+    /// Queue priority — <b>higher runs sooner</b>, with <see cref="CreatedAt"/> breaking ties. Default
+    /// <c>0</c>, so a queue nobody reorders keeps the plain first-come order it has always had.
+    /// </summary>
+    /// <remarks>
+    /// Sparse on purpose (#51): move-to-top is one write of <c>min - 1</c> rather than renumbering every
+    /// neighbour, which an explicit position column would require and which two concurrent enqueues can
+    /// race on. The trade is that there is no stable "job #3" number — a visually ordered queue conveys
+    /// position without one.
+    /// </remarks>
+    public int Priority { get; private set; }
+
     /// <summary>Worker that claimed this job (set during MarkClaiming).</summary>
     public string? WorkerId { get; private set; }
 
@@ -137,6 +149,22 @@ public class DownloadJob
     {
         Status      = DownloadStatus.Cancelled;
         CompletedAt = DateTimeOffset.UtcNow;
+    }
+
+    // ── Queue ordering ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Sets the queue priority. Only meaningful while <see cref="DownloadStatus.Queued"/> — reordering a
+    /// job that is already downloading or finished would change nothing and imply otherwise, so it is
+    /// refused rather than silently ignored.
+    /// </summary>
+    public void SetPriority(int priority)
+    {
+        if (Status != DownloadStatus.Queued)
+            throw new InvalidOperationException(
+                $"Only a queued download can be reordered; this one is {Status}.");
+
+        Priority = priority;
     }
 
     // ── Convenience ───────────────────────────────────────────────────────

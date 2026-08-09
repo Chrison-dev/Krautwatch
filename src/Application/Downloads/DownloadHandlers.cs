@@ -111,7 +111,17 @@ public class GetDownloadQueueHandler(IDownloadJobRepository jobRepository)
     public async Task<IReadOnlyList<DownloadJobResponse>> HandleAsync(CancellationToken ct = default)
     {
         var jobs = await jobRepository.GetAllAsync(ct);
-        return jobs.Select(DownloadJobMapper.ToResponse).ToList();
+
+        // Queued jobs first, in the order they will actually run; everything else newest-first as before.
+        // Without this a reordered job would still be listed by age, so the queue UI — and the index
+        // SABnzbd reports to Sonarr — would contradict the order the downloader picks from (#51).
+        return jobs
+            .OrderByDescending(j => j.Status == DownloadStatus.Queued)
+            .ThenByDescending(j => j.Status == DownloadStatus.Queued ? j.Priority : int.MinValue)
+            .ThenBy(j => j.Status == DownloadStatus.Queued ? j.CreatedAt : DateTimeOffset.MinValue)
+            .ThenByDescending(j => j.CreatedAt)
+            .Select(DownloadJobMapper.ToResponse)
+            .ToList();
     }
 }
 
@@ -148,5 +158,6 @@ public static class DownloadJobMapper
         CompletedAt:     job.CompletedAt,
         Active:          job.IsActive,
         GeoRestricted:   job.GeoRestricted,
-        ReleaseName:     job.ReleaseName);
+        ReleaseName:     job.ReleaseName,
+        Priority:        job.Priority);
 }

@@ -99,6 +99,15 @@ public class DownloadSupervisorTests
         }
 
         public Task<int> ReclaimStaleAsync(string workerId, CancellationToken ct = default) => Task.FromResult(0);
+
+        public Task<IReadOnlyList<DownloadJob>> GetQueuedOrderedAsync(CancellationToken ct = default)
+        {
+            lock (_gate) return Task.FromResult<IReadOnlyList<DownloadJob>>(
+                _jobs.Where(j => j.Status == DownloadStatus.Queued)
+                     .OrderByDescending(j => j.Priority)
+                     .ThenBy(j => j.CreatedAt)
+                     .ToList());
+        }
         public Task UpdateAsync(DownloadJob job, CancellationToken ct = default) => Task.CompletedTask;
         public Task UpdateProgressAsync(Guid id, double percent, CancellationToken ct = default) => Task.CompletedTask;
         public Task AddAsync(DownloadJob job, CancellationToken ct = default) => Task.CompletedTask;
