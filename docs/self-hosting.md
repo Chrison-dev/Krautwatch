@@ -3,12 +3,15 @@
 Step by step, for a NAS, a home server or a Pi. Assumes you already run Sonarr or Radarr and know your
 way around `docker compose`.
 
-> **Read this first — the one thing that is not proven.** Every step up to Sonarr *importing* a finished
-> download is demonstrated against a real Sonarr 4.0.19: search, grab, download, correct filename, path
-> resolved. The import itself depends on your storage layout and has not been verified end to end by the
-> project. If it works for you, please say so on
-> [#26](https://github.com/Chrison-dev/Krautwatch/issues/26); if it does not,
-> [Sonarr cannot see the file](#sonarr-says-no-files-are-eligible-for-import) is the place to start.
+> **Read this first — two known setup blockers.** The full round trip *is* proven, including Sonarr's
+> import, against released images and a real Sonarr 4.0.19. But two open bugs will stop you following
+> this guide verbatim:
+>
+> - **[#96](https://github.com/Chrison-dev/Krautwatch/issues/96)** — set the SABnzbd client's **URL Base
+>   to `/sabnzbd`**, or it cannot be added at all. Noted again in §5.
+> - **[#95](https://github.com/Chrison-dev/Krautwatch/issues/95)** — Sonarr cannot search a **daily**
+>   series, which is most German public TV. Shows with real `SxxExx` numbering work. Until this is fixed,
+>   dated shows have to be downloaded from Krautwatch's own UI.
 
 ---
 
@@ -149,6 +152,7 @@ Point both at the **`newznab`** service on port `5055` — not the web UI.
 | Field | Value |
 |---|---|
 | Host / Port | `<host>` / `5055` |
+| **URL Base** | **`/sabnzbd`** — required ([#96](https://github.com/Chrison-dev/Krautwatch/issues/96)); leaving it blank fails the connection test |
 | API Key | your `KRAUTWATCH_APIKEY` |
 | Category | `tv` |
 
@@ -378,7 +382,8 @@ A secret reference that does not resolve in that container (§7). The message na
 
 Worth knowing before you commit to this:
 
-- **Sonarr's import step is unproven** by the project — see the note at the top.
+- **A daily series cannot be searched from Sonarr** ([#95](https://github.com/Chrison-dev/Krautwatch/issues/95))
+  — the single biggest limitation today, since most German public TV is dated.
 - **Subtitles are German-only and best-effort.** Where a broadcaster publishes a WebVTT track it is
   written beside the video as `{video}.de.vtt`, which Plex, Jellyfin and Sonarr pick up unaided. Not
   every programme has one, and a subtitle that fails to fetch never fails the video.
