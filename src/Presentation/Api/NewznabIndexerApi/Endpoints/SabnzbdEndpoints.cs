@@ -36,7 +36,11 @@ public static class SabnzbdEndpoints
         return app;
     }
 
-    private static async Task<IResult> HandleAsync(
+    /// <summary>
+    /// Internal rather than private so <see cref="NewznabEndpoints"/> can serve the same surface on
+    /// <c>/api</c>, which is where real SABnzbd lives and where Sonarr looks by default (#96).
+    /// </summary>
+    internal static async Task<IResult> HandleAsync(
         HttpContext http,
         IConfiguration config,
         AddDownloadByTokenHandler add,

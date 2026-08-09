@@ -1,6 +1,8 @@
 using Krautwatch.Api.NewznabIndexerApi.Auth;
 using Krautwatch.Api.NewznabIndexerApi.Newznab;
+using Krautwatch.Application.Downloads;
 using Krautwatch.Application.Indexing;
+using Krautwatch.Domain.Interfaces;
 
 namespace Krautwatch.Api.NewznabIndexerApi.Endpoints;
 
@@ -13,10 +15,48 @@ public static class NewznabEndpoints
 {
     public static IEndpointRouteBuilder MapNewznabEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api", HandleApiAsync).WithName("Newznab");
+        // GET and POST, because the SABnzbd surface shares this path and `mode=addfile` is a multipart
+        // POST. See DispatchAsync for why they share it.
+        app.MapMethods("/api", ["GET", "POST"], DispatchAsync).WithName("Newznab");
         app.MapGet("/download", HandleDownload).WithName("NewznabDownload");
         return app;
     }
+
+    /// <summary>
+    /// Routes <c>/api</c> to whichever surface the caller meant (#96).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Real SABnzbd serves its API at <c>/api</c>, and Sonarr defaults a SABnzbd client's URL base to
+    /// empty — so an operator following our own docs pointed the download client at <c>/api</c>, hit the
+    /// Newznab handler, and got a 400 reported as <i>"Unable to connect to SABnzbd"</i>. The download
+    /// client could not be added at all without knowing to type <c>/sabnzbd</c>.
+    /// </para>
+    /// <para>
+    /// The two are trivially separable: Newznab always sends <c>t=</c> and SABnzbd always sends
+    /// <c>mode=</c>. Dispatching on that costs nothing and removes the trap. <c>/sabnzbd/api</c> keeps
+    /// working, both for anyone already configured and for reverse proxies that need a distinct subpath.
+    /// </para>
+    /// </remarks>
+    private static Task<IResult> DispatchAsync(
+        HttpContext http,
+        SearchReleasesHandler search,
+        IConfiguration config,
+        AddDownloadByTokenHandler add,
+        GetDownloadQueueHandler queue,
+        CancelDownloadHandler cancel,
+        ISettingsRepository settings,
+        string? t,
+        string? q,
+        string? season,
+        string? ep,
+        int? tvdbid,
+        string? apikey,
+        int? limit,
+        CancellationToken ct) =>
+        string.IsNullOrEmpty(http.Request.Query["mode"])
+            ? HandleApiAsync(http, search, config, t, q, season, ep, tvdbid, apikey, limit, ct)
+            : SabnzbdEndpoints.HandleAsync(http, config, add, queue, cancel, settings, ct);
 
     private static async Task<IResult> HandleApiAsync(
         HttpContext http,
