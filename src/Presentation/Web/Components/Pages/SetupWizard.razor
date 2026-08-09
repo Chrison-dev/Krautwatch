@@ -1,0 +1,293 @@
+@page "/setup/{Step?}"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject IServiceScopeFactory Scopes
+@inject NavigationManager Nav
+@inject IConfiguration Config
+@using Krautwatch.Application.Settings
+@using Krautwatch.Domain.Enums
+
+@* First-run wizard, steps 3-6 (#54). Steps 1-2 — what this is, and creating the administrator — live on
+   /setup, which is anonymous and gated on the startup token. They stay there deliberately: that page is
+   the one that must not be claimable by whoever reaches the box first, and it already carries a reviewed
+   double gate. Everything here requires the session that creating the administrator produces, which is a
+   strictly stronger gate than the token.
+
+   One route with a step parameter rather than a page each, so the anonymous-page list the architecture
+   tests assert stays exactly Login/Logout/Setup.
+
+   Interactive, unlike /setup: no cookie is written here, and the Test actions need a circuit. *@
+
+<PageTitle>Set up Krautwatch · @Current.ToString()</PageTitle>
+
+<div class="wizard">
+    <ol class="wizard-steps">
+        @foreach (var step in Steps)
+        {
+            <li class="@(step == Current ? "current" : step < Current ? "done" : "")">
+                <span class="num">@((int)step - 1)</span>
+                <span>@Label(step)</span>
+            </li>
+        }
+    </ol>
+
+    @if (_state is null)
+    {
+        <p class="muted">Loading…</p>
+    }
+    else
+    {
+        <section class="panel">
+            @switch (Current)
+            {
+                case SetupStep.Database:
+                    <h2>Database</h2>
+                    <p class="muted small">
+                        Krautwatch stores its catalog, settings and download history here. The connection
+                        comes from your deployment — the <code>migrator</code> service applies the schema
+                        before anything else starts, so if you reached this page it is already up to date.
+                    </p>
+                    <dl class="kv">
+                        <dt>Provider</dt><dd>PostgreSQL</dd>
+                        <dt>Host</dt><dd class="path">@DatabaseHost()</dd>
+                        <dt>Schema</dt><dd><span class="ok">✓ applied</span></dd>
+                    </dl>
+                    <p class="muted small">
+                        Read-only on purpose: an app cannot rewrite its own connection string and restart
+                        itself, so offering to edit it here would be a form that quietly does nothing.
+                        Change it in your compose file or environment.
+                    </p>
+                    break;
+
+                case SetupStep.Downloads:
+                    <h2>Downloads</h2>
+                    <p class="muted small">
+                        Where finished files land. This must be a path your <code>*arr</code> apps can also
+                        see — they import by reading the file we wrote.
+                    </p>
+
+                    <label>
+                        Download directory
+                        <input @bind="_downloadDirectory" placeholder="/downloads" />
+                    </label>
+
+                    <label>
+                        Parallel downloads
+                        <input type="number" min="1" max="16" @bind="_maxConcurrent" />
+                        <span class="muted small">Per downloader process.</span>
+                    </label>
+
+                    @if (_writeCheck is not null)
+                    {
+                        <p class="@(_writeCheckOk ? "ok" : "error")" role="status">@_writeCheck</p>
+                    }
+
+                    <div class="actions">
+                        <button class="icon-btn" @onclick="CheckWritableAsync">Check the directory</button>
+                    </div>
+                    break;
+
+                case SetupStep.ArrInstances:
+                    <h2>Sonarr / Radarr</h2>
+                    <p class="muted small">
+                        Optional — search and manual downloads work without one. Add instances in
+                        <a href="settings">Settings</a>, then paste the details below into the
+                        <code>*arr</code> side.
+                    </p>
+
+                    <dl class="kv">
+                        <dt>Indexer (Newznab)</dt><dd class="path">@IndexerUrl()/api</dd>
+                        <dt>Download client (SABnzbd)</dt><dd class="path">@IndexerUrl()</dd>
+                        <dt>API key</dt><dd class="path">@ApiKeyHint()</dd>
+                    </dl>
+
+                    <p class="muted small">
+                        In Sonarr add a <strong>Newznab</strong> indexer with API path <code>/api</code>,
+                        and a <strong>SABnzbd</strong> download client on the same host.
+                    </p>
+                    break;
+
+                case SetupStep.Done:
+                    <h2>You're set up</h2>
+                    <p class="muted small">
+                        Everything here lives in <a href="settings">Settings</a> and can be changed at any
+                        time. This wizard will not appear again.
+                    </p>
+                    <ul class="muted small">
+                        <li>Downloads go to <code>@_downloadDirectory</code>, @_maxConcurrent at a time.</li>
+                        <li>Search resolves against the broadcasters on demand — nothing to pre-configure.</li>
+                        <li>Geo-restricted content needs a German egress proxy, configured on the
+                            downloader service. See the self-hosting guide.</li>
+                    </ul>
+                    break;
+            }
+
+            @if (_error is not null)
+            {
+                <p class="error" role="alert">@_error</p>
+            }
+
+            <div class="actions">
+                @if (Current > SetupStep.Database)
+                {
+                    <button class="icon-btn" @onclick="Back">Back</button>
+                }
+                @if (Current < SetupStep.Done)
+                {
+                    <button class="primary narrow" @onclick="NextAsync">Next</button>
+                }
+                else
+                {
+                    <button class="primary narrow" @onclick="FinishAsync">Finish</button>
+                }
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Step { get; set; }
+
+    static readonly SetupStep[] Steps =
+        [SetupStep.Database, SetupStep.Downloads, SetupStep.ArrInstances, SetupStep.Done];
+
+    SetupState? _state;
+    string _downloadDirectory = "";
+    int _maxConcurrent = 2;
+    string? _writeCheck;
+    bool _writeCheckOk;
+    string? _error;
+
+    SetupStep Current =>
+        Enum.TryParse<SetupStep>(Step, ignoreCase: true, out var parsed) && Steps.Contains(parsed)
+            ? parsed
+            : SetupStep.Database;
+
+    static string Label(SetupStep step) => step switch
+    {
+        SetupStep.Database => "Database",
+        SetupStep.Downloads => "Downloads",
+        SetupStep.ArrInstances => "Sonarr / Radarr",
+        _ => "Done",
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var scope = Scopes.CreateScope();
+        _state = await scope.ServiceProvider.GetRequiredService<SetupWizardStateHandler>().HandleAsync();
+
+        // Already finished — nothing here is meaningful, and re-running it would imply otherwise.
+        if (!_state.Required)
+        {
+            Nav.NavigateTo("", replace: true);
+            return;
+        }
+
+        var settings = await scope.ServiceProvider.GetRequiredService<GetSettingsHandler>().HandleAsync();
+        _downloadDirectory = settings.DownloadDirectory;
+        _maxConcurrent = settings.MaxConcurrentDownloads;
+    }
+
+    void Back() => Go(Steps[Math.Max(0, Array.IndexOf(Steps, Current) - 1)]);
+
+    async Task NextAsync()
+    {
+        _error = null;
+
+        // Persist as we go, so a wizard abandoned halfway resumes with the answers already given rather
+        // than losing them — the reason completion is tracked separately from "an administrator exists".
+        if (Current == SetupStep.Downloads && !await SaveDownloadsAsync())
+            return;
+
+        Go(Steps[Math.Min(Steps.Length - 1, Array.IndexOf(Steps, Current) + 1)]);
+    }
+
+    void Go(SetupStep step) => Nav.NavigateTo($"setup/{step}");
+
+    async Task<bool> SaveDownloadsAsync()
+    {
+        using var scope = Scopes.CreateScope();
+        var current = await scope.ServiceProvider.GetRequiredService<GetSettingsHandler>().HandleAsync();
+
+        var request = new SaveSettingsRequest(
+            _downloadDirectory,
+            _maxConcurrent,
+            current.CatalogRefreshIntervalHours,
+            current.SearchWaitMode,
+            current.SearchWaitSeconds);
+
+        var validation = new SaveSettingsRequestValidator().Validate(request);
+        if (!validation.IsValid)
+        {
+            _error = string.Join(" ", validation.Errors.Select(e => e.ErrorMessage));
+            return false;
+        }
+
+        await scope.ServiceProvider.GetRequiredService<SaveSettingsHandler>().HandleAsync(request);
+        return true;
+    }
+
+    /// <summary>
+    /// Proves the directory is actually writable rather than merely well-formed. The settings form
+    /// accepts any syntactically valid path, so the first evidence of a bad one is currently a download
+    /// failing much later, which reads as a broken downloader rather than a misconfigured path.
+    /// </summary>
+    async Task CheckWritableAsync()
+    {
+        _writeCheck = null;
+        var directory = _downloadDirectory?.Trim();
+
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            _writeCheckOk = false;
+            _writeCheck = "Enter a directory first.";
+            return;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            var probe = Path.Combine(directory, $".krautwatch-write-test-{Guid.NewGuid():N}");
+            await File.WriteAllTextAsync(probe, "ok");
+            File.Delete(probe);
+
+            _writeCheckOk = true;
+            _writeCheck = $"✓ {directory} exists and is writable.";
+        }
+        catch (Exception ex)
+        {
+            _writeCheckOk = false;
+            // The message, not the exception: an operator needs the reason, not a stack.
+            _writeCheck = $"✕ Cannot write to {directory} — {ex.Message}";
+        }
+
+        // The Web host and the downloader are separate containers, so this proves the path from here
+        // only. Say so rather than implying a guarantee we cannot make.
+        if (_writeCheckOk)
+            _writeCheck += " Checked from the web service — the downloader needs the same path mounted.";
+    }
+
+    async Task FinishAsync()
+    {
+        using var scope = Scopes.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<CompleteSetupHandler>().HandleAsync();
+        Nav.NavigateTo("", forceLoad: true);
+    }
+
+    string DatabaseHost()
+    {
+        var connection = Config.GetConnectionString("krautwatch") ?? "";
+        var host = connection.Split(';')
+            .FirstOrDefault(part => part.TrimStart().StartsWith("Host=", StringComparison.OrdinalIgnoreCase));
+
+        // Never render the raw connection string — it carries the password.
+        return host?.Trim()["Host=".Length..] ?? "configured by your deployment";
+    }
+
+    string IndexerUrl() => Config["Krautwatch:PublicUrl"] ?? "http://<your-host>:5055";
+
+    string ApiKeyHint() =>
+        string.IsNullOrWhiteSpace(Config["Krautwatch:ApiKey"])
+            ? "not set — the newznab service reads KRAUTWATCH_APIKEY"
+            : "as set in KRAUTWATCH_APIKEY";
+}

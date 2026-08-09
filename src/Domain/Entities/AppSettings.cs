@@ -13,6 +13,17 @@ public class AppSettings
     public int CatalogRefreshIntervalHours { get; set; } = 6;
 
     /// <summary>
+    /// When first-run setup was completed, or null while it has not been (#54).
+    /// </summary>
+    /// <remarks>
+    /// Distinct from "an administrator exists", which is what first-run used to be inferred from. That
+    /// cannot express <em>admin created, wizard abandoned halfway</em> — so the wizard could not resume
+    /// where it left off, only restart. A timestamp rather than a flag because when an instance was set
+    /// up is worth knowing later and costs the same column.
+    /// </remarks>
+    public DateTimeOffset? SetupCompletedAt { get; set; }
+
+    /// <summary>
     /// What a search should do when the show has not been crawled yet (#58). Defaults to
     /// <see cref="SearchWaitMode.ReturnFast"/>, because Sonarr treats a slow indexer as a broken one.
     /// </summary>

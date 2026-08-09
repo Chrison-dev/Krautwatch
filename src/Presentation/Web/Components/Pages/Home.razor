@@ -1,6 +1,9 @@
 @page "/"
 @rendermode InteractiveServer
 @attribute [Authorize]
+@inject IServiceScopeFactory Scopes
+@inject NavigationManager Nav
+@using Krautwatch.Application.Settings
 
 <PageTitle>Krautwatch</PageTitle>
 
@@ -25,3 +28,17 @@
     Wiring Krautwatch into Sonarr/Radarr? It also exposes a Newznab indexer and a SABnzbd download
     client — this UI is just the standalone way in.
 </p>
+
+@code {
+    // Send a signed-in operator into first-run setup until it is finished (#54). Placed on the root
+    // rather than in middleware so it applies to the one page every route eventually lands on, without
+    // intercepting the wizard, the auth pages or the *arr-facing surfaces.
+    protected override async Task OnInitializedAsync()
+    {
+        using var scope = Scopes.CreateScope();
+        var state = await scope.ServiceProvider.GetRequiredService<SetupWizardStateHandler>().HandleAsync();
+
+        if (state.Required && state.AdministratorExists)
+            Nav.NavigateTo($"setup/{state.ResumeAt}", replace: true);
+    }
+}
