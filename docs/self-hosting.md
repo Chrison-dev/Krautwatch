@@ -76,12 +76,10 @@ docker compose up -d
 Sonarr imports by **reading the file the downloader wrote**. So both containers have to see that file, at
 the same path.
 
-> ⚠️ **On v0.1.1, `KRAUTWATCH_DOWNLOADS` is missing from `env.example`**
-> ([#83](https://github.com/Chrison-dev/Krautwatch/issues/83), fixed for the next release). If your
-> `env.example` does not list it, add the line yourself — otherwise the downloader writes into a
-> `./downloads` folder next to your compose file and Sonarr never finds anything.
->
-> **Leaving it blank has the same effect as omitting it**, so give it a real path either way.
+> ⚠️ **Give this a real path.** Leaving it blank has exactly the same effect as omitting it — the
+> downloader writes into a `./downloads` folder next to your compose file and Sonarr never finds
+> anything. (On v0.1.1 and earlier the key is missing from `env.example` altogether,
+> [#83](https://github.com/Chrison-dev/Krautwatch/issues/83) — add the line yourself.)
 
 Set it to a host path, and mount that **same host path into Sonarr at the same container path**:
 
@@ -381,8 +379,9 @@ A secret reference that does not resolve in that container (§7). The message na
 Worth knowing before you commit to this:
 
 - **Sonarr's import step is unproven** by the project — see the note at the top.
-- **No subtitles.** The subtitle URL is parsed at crawl time but never fetched
-  ([#20](https://github.com/Chrison-dev/Krautwatch/issues/20)).
+- **Subtitles are German-only and best-effort.** Where a broadcaster publishes a WebVTT track it is
+  written beside the video as `{video}.de.vtt`, which Plex, Jellyfin and Sonarr pick up unaided. Not
+  every programme has one, and a subtitle that fails to fetch never fails the video.
 - **No OIDC** ([#48](https://github.com/Chrison-dev/Krautwatch/issues/48)).
 - **The download queue ignores `MaxConcurrentDownloads`** and has no priority ordering
   ([#51](https://github.com/Chrison-dev/Krautwatch/issues/51)).

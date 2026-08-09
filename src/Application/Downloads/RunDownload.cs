@@ -15,7 +15,8 @@ public class RunDownloadHandler(
     IDownloadJobRepository jobs,
     IDownloadProvider provider,
     ISettingsRepository settings,
-    ILogger<RunDownloadHandler> logger)
+    ILogger<RunDownloadHandler> logger,
+    ISubtitleFetcher? subtitles = null)
 {
     // How often the download's progress is flushed to the DB (so Sonarr's queue shows a live %),
     // kept coarse to avoid a write per read.
@@ -57,6 +58,11 @@ public class RunDownloadHandler(
             }
 
             var result = await download;
+
+            // After the video, and deliberately not gating on it: a subtitle that 404s or times out must
+            // not turn a perfectly good download into a failure (#20).
+            await FetchSubtitlesAsync(job, result.OutputPath, ct);
+
             job.MarkCompleted(result.OutputPath, result.SizeBytes);
             await jobs.UpdateAsync(job, ct);
             logger.LogInformation("Download {JobId} completed: {Path}", job.Id, result.OutputPath);
@@ -76,5 +82,21 @@ public class RunDownloadHandler(
             await jobs.UpdateAsync(job, ct);
             logger.LogError(ex, "Download {JobId} failed", job.Id);
         }
+    }
+
+    /// <summary>
+    /// Fetches the episode's subtitle track beside the finished video, when the broadcaster published
+    /// one. Best-effort throughout: no subtitle is a normal outcome for a lot of German public TV, and
+    /// failing a completed download over one would be absurd.
+    /// </summary>
+    private async Task FetchSubtitlesAsync(DownloadJob job, string videoPath, CancellationToken ct)
+    {
+        var url = job.Episode?.SubtitleUrl;
+        if (subtitles is null || string.IsNullOrWhiteSpace(url))
+            return;
+
+        var written = await subtitles.FetchAsync(url, videoPath, job.GeoRestricted, ct);
+        if (written is null)
+            logger.LogInformation("No subtitle written for {JobId}.", job.Id);
     }
 }

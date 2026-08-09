@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - It exposes a **Newznab indexer** (`caps`/`search`/`tvsearch` + an RSS feed) that Sonarr/Prowlarr call.
 - It exposes a **SABnzbd-compatible download client** API, then pulls the actual streams via direct
-  HTTP/HLS + ffmpeg. (Subtitles are *not* fetched yet — #20.)
+  HTTP/HLS + ffmpeg, with a WebVTT subtitle sidecar where the broadcaster publishes one (#20).
 - Per-broadcaster **crawler agents** build the catalog. There is also a standalone **Web** UI (search /
   manual download / monitor / settings, including which Sonarr/Radarr to reach back to). See DR-010.
 
@@ -49,7 +49,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 >   itself needs the Downloader and Sonarr to share a filesystem; compose makes that possible but it has
 >   not been run. See `docs/plans/2026-08-02 - beta readiness.md`.
 > - OIDC is **not** implemented — `Auth:Provider = oidc` is a stub. Local + `none` work (#48).
-> - Subtitles are parsed at crawl time but never persisted or fetched (#20).
+> - Subtitles ship (#20): parsed from ARD and ZDF, persisted on `Episode.SubtitleUrl`, and fetched
+>   by the Downloader as `{video}.de.vtt`. Best-effort — a missing subtitle never fails the video.
 
 ## Architecture (DR-009 — read `docs/architecture/DR-009` before structural changes)
 

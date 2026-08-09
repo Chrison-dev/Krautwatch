@@ -82,4 +82,21 @@ public class ZdfLiveTests
             if (File.Exists(path)) File.Delete(path);
         }
     }
+
+    [Fact]
+    public async Task Resolves_a_WebVTT_subtitle_track()
+    {
+        // The only genuine check that our caption parsing matches ZDF's real PTMD shape (#20) — the unit
+        // tests assert our handling of a document we wrote ourselves, which proves nothing about theirs.
+        // If ZDF renames the field or drops WebVTT, this is what says so.
+        var episodes = await Client.SearchEpisodesAsync("Heute Show", TestContext.Current.CancellationToken);
+        var episode = episodes.First(e => e.Title.Contains("heute-show vom", StringComparison.OrdinalIgnoreCase));
+
+        var stream = await Client.ResolveBestMp4Async(episode.Canonical, TestContext.Current.CancellationToken);
+
+        stream.ShouldNotBeNull();
+        stream!.SubtitleUrl.ShouldNotBeNullOrWhiteSpace(
+            "ZDF publishes captions for heute-show; a null here means the PTMD shape changed.");
+        stream.SubtitleUrl!.ShouldContain(".vtt");
+    }
 }
