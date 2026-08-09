@@ -17,7 +17,6 @@
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.Extensions.Identity.Core" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
-    <PackageReference Include="SharpCompress" />
   </ItemGroup>
 
   <ItemGroup Label="TheTVDB — the ITvdbCatalog adapter (Chrison-dev/TvdbApi)">

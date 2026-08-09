@@ -38,10 +38,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 >   `Agents/{Ard,Zdf}/Program.cs`) — that is now **by design**: per DR-011 the standing list is
 >   RSS-feed input, not the search path. Reach-back to Sonarr is an optional pre-warm, not a
 >   requirement (#6; DR-010's work-list clause is retracted).
-> - `AppSettings.CatalogProviderKey` still defaults to `"mediathekview"` (`AppDbContext.cs`), and
->   `Infrastructure/Catalog/MediathekView` survives from the DR-001 era. **Do not delete it yet** —
->   per DR-011 the filmliste is the only full-catalog source available, and it is the fallback if
->   per-show crawling proves too narrow (#49 is on hold).
+> - **The MediathekView subsystem is gone (#49).** `Infrastructure/Catalog/MediathekView`, the
+>   `ICatalogProvider` port and `AppSettings.CatalogProviderKey` were removed once DR-011's condition for
+>   deleting them was met — the search model was decided and shipped as on-demand resolution (#58), so
+>   breadth no longer depends on a full-catalog dump. The catalog is built **only** by the per-broadcaster
+>   crawler agents behind `IBroadcasterCrawler`, which is now the sole catalog extension point. DR-001 and
+>   DR-011 plus git history remain the specification if the filmliste approach is ever revived.
 > - **Sonarr has never been proven to actually import.** Every hop before it is demonstrated against a
 >   real Sonarr 4.0.19 (search → grab → NZB accepted → download completes → path resolved). The import
 >   itself needs the Downloader and Sonarr to share a filesystem; compose makes that possible but it has
@@ -114,8 +116,8 @@ public record CrawlShowCommand(string ProviderKey, string ShowQuery);
 public class CrawlShowHandler(...)
 ```
 
-**Ports live in `Domain/Interfaces/`** — `IBroadcasterCrawler`, `ICatalogProvider`,
-`IDownloadProvider`, `IDownloadQueue`, `IEgressProxyProvider`, `IMessageDispatcher`, `IRepositories`.
+**Ports live in `Domain/Interfaces/`** — `IArr`, `IAuth`, `IBroadcasterCrawler`, `IDownloadProvider`,
+`IDownloadQueue`, `IEgressProxyProvider`, `IMessageDispatcher`, `IRepositories`, `ISecrets`, `ITvdb`.
 There is no `Application/Abstractions/`.
 
 ### Persistence & messaging

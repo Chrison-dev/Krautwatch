@@ -208,7 +208,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 DownloadDirectory = "/downloads",
                 MaxConcurrentDownloads = 2,
                 CatalogRefreshIntervalHours = 6,
-                CatalogProviderKey = "mediathekview"
             });
         });
 

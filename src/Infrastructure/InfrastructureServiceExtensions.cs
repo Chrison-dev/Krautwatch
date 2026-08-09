@@ -3,7 +3,6 @@ using Krautwatch.Domain.Options;
 using Krautwatch.Infrastructure.Arr;
 using Krautwatch.Infrastructure.Auth;
 using Krautwatch.Infrastructure.Catalog;
-using Krautwatch.Infrastructure.Catalog.MediathekView;
 using Krautwatch.Infrastructure.Crawling.Ard;
 using Krautwatch.Infrastructure.Crawling.Zdf;
 using Krautwatch.Infrastructure.Downloads;
@@ -108,25 +107,6 @@ public static class InfrastructureServiceExtensions
         }
     }
 
-    /// <summary>
-    /// Registers the MediathekView catalog provider.
-    /// </summary>
-    public static IServiceCollection AddMediathekViewCatalogProvider(
-        this IServiceCollection services,
-        Action<MediathekViewOptions>? configure = null)
-    {
-        services.AddOptions<MediathekViewOptions>()
-            .Configure<IConfiguration>((opts, cfg) =>
-                cfg.GetSection(MediathekViewOptions.SectionName).Bind(opts));
-
-        if (configure is not null)
-            services.Configure(configure);
-
-        services.AddScoped<FilmlisteParser>();
-        services.AddScoped<ICatalogProvider, MediathekViewProvider>();
-
-        return services;
-    }
 
     /// <summary>
     /// Registers the ARD-platform crawlers (regular ARD + KiKA) behind the <see cref="IBroadcasterCrawler"/>

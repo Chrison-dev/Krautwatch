@@ -11,7 +11,6 @@ public class AppSettings
     public string DownloadDirectory { get; set; } = "/downloads";
     public int MaxConcurrentDownloads { get; set; } = 2;
     public int CatalogRefreshIntervalHours { get; set; } = 6;
-    public string CatalogProviderKey { get; set; } = "mediathekview";
 
     /// <summary>
     /// What a search should do when the show has not been crawled yet (#58). Defaults to
