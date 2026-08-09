@@ -38,7 +38,18 @@
     }
     else
     {
-        <h1>Create your administrator</h1>
+        <h1>Welcome to Krautwatch</h1>
+        <p class="muted">
+            Krautwatch is an <strong>indexer and download client</strong> for German public TV, built to be
+            driven by Sonarr or Radarr — they search it, grab from it, and it pulls the stream to disk. It
+            also works on its own if you would rather search and download by hand.
+        </p>
+        <p class="muted">
+            It is <em>not</em> a Mediathek browser: there is no catalog to sit and browse. Searching
+            resolves against the broadcasters on demand.
+        </p>
+
+        <h2>Create your administrator</h2>
         <p class="muted">This is the only account Krautwatch creates. You can switch to OIDC later.</p>
 
         <EditForm Model="Input!" OnValidSubmit="Submit" FormName="setup">

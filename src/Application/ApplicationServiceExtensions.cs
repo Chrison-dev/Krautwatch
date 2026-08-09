@@ -35,6 +35,8 @@ public static class ApplicationServiceExtensions
 
         // Settings
         services.AddScoped<GetSettingsHandler>();
+        services.AddScoped<SetupWizardStateHandler>();
+        services.AddScoped<CompleteSetupHandler>();
         services.AddScoped<SaveSettingsHandler>();
         // Show↔TVDB mapping management. Repository-only, so safe for every host — unlike the resolver in
         // AddTvdbMatching, none of these needs an ITvdbCatalog.
