@@ -24,10 +24,7 @@
     <ol class="wizard-steps">
         @foreach (var step in Steps)
         {
-            <li class="@(step == Current ? "current" : step < Current ? "done" : "")">
-                <span class="num">@((int)step - 1)</span>
-                <span>@Label(step)</span>
-            </li>
+            <li class="@(step == Current ? "current" : step < Current ? "done" : "")">@Label(step)</li>
         }
     </ol>
 
@@ -77,14 +74,12 @@
                         <span class="muted small">Per downloader process.</span>
                     </label>
 
-                    @if (_writeCheck is not null)
-                    {
-                        <p class="@(_writeCheckOk ? "ok" : "error")" role="status">@_writeCheck</p>
-                    }
-
-                    <div class="actions">
-                        <button class="icon-btn" @onclick="CheckWritableAsync">Check the directory</button>
-                    </div>
+                    <p class="muted small">
+                        <strong>This path is not checked here.</strong> Only the downloader service mounts
+                        your media — the web service deliberately cannot reach it, so a check from this
+                        page would fail even when your setup is correct. What matters is that the
+                        downloader and your <code>*arr</code> apps see this same path.
+                    </p>
                     break;
 
                 case SetupStep.Egress:
@@ -189,8 +184,6 @@
     int _maxConcurrent = 2;
     string _egressProxyUrl = "";
     bool _egressListEnabled;
-    string? _writeCheck;
-    bool _writeCheckOk;
     string? _error;
 
     SetupStep Current =>
@@ -268,45 +261,6 @@
         return true;
     }
 
-    /// <summary>
-    /// Proves the directory is actually writable rather than merely well-formed. The settings form
-    /// accepts any syntactically valid path, so the first evidence of a bad one is currently a download
-    /// failing much later, which reads as a broken downloader rather than a misconfigured path.
-    /// </summary>
-    async Task CheckWritableAsync()
-    {
-        _writeCheck = null;
-        var directory = _downloadDirectory?.Trim();
-
-        if (string.IsNullOrWhiteSpace(directory))
-        {
-            _writeCheckOk = false;
-            _writeCheck = "Enter a directory first.";
-            return;
-        }
-
-        try
-        {
-            Directory.CreateDirectory(directory);
-            var probe = Path.Combine(directory, $".krautwatch-write-test-{Guid.NewGuid():N}");
-            await File.WriteAllTextAsync(probe, "ok");
-            File.Delete(probe);
-
-            _writeCheckOk = true;
-            _writeCheck = $"✓ {directory} exists and is writable.";
-        }
-        catch (Exception ex)
-        {
-            _writeCheckOk = false;
-            // The message, not the exception: an operator needs the reason, not a stack.
-            _writeCheck = $"✕ Cannot write to {directory} — {ex.Message}";
-        }
-
-        // The Web host and the downloader are separate containers, so this proves the path from here
-        // only. Say so rather than implying a guarantee we cannot make.
-        if (_writeCheckOk)
-            _writeCheck += " Checked from the web service — the downloader needs the same path mounted.";
-    }
 
     async Task FinishAsync()
     {
