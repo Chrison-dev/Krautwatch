@@ -13,7 +13,6 @@ public record SettingsResponse(
     string DownloadDirectory,
     int MaxConcurrentDownloads,
     int CatalogRefreshIntervalHours,
-    string CatalogProviderKey,
     SearchWaitMode SearchWaitMode,
     int SearchWaitSeconds,
     string TvdbApiKeyMasked,
@@ -106,7 +105,6 @@ file static class SettingsMapper
         DownloadDirectory:           s.DownloadDirectory,
         MaxConcurrentDownloads:      s.MaxConcurrentDownloads,
         CatalogRefreshIntervalHours: s.CatalogRefreshIntervalHours,
-        CatalogProviderKey:          s.CatalogProviderKey,
         SearchWaitMode:              s.SearchWaitMode,
         SearchWaitSeconds:           s.SearchWaitSeconds,
         // Never the real key. When configuration supplies it we do not even have the value here — say so

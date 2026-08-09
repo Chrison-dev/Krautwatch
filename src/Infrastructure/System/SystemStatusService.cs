@@ -93,7 +93,7 @@ public class SystemStatusService
     {
         lock (_lock)
         {
-            SetStep("Catalog refresh", StepStatus.InProgress, "Connecting to MediathekView…");
+            SetStep("Catalog refresh", StepStatus.InProgress, "Connecting to the broadcaster…");
             _currentTask = "Starting catalog download…";
         }
     }

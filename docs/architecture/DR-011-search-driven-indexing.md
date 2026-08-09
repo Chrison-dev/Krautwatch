@@ -86,6 +86,13 @@ RundfunkArr has the identical constraint and answers it with human curation.
   full-catalog source MediathekArr depends on; it is the mechanism for breadth without per-show
   curation. Decide the search model before deleting it. (The `SharpCompress` advisory that motivated #49
   was resolved by a version bump, so there is no security pressure to remove it.)
+
+  > **Hold lifted 2026-08-09 — the condition above was met.** The search model *was* decided and shipped:
+  > #58 implemented on-demand resolution against the broadcasters' own APIs, so breadth no longer depends
+  > on a full-catalog dump. The subsystem was removed in #49. Note it had already decayed past being a
+  > usable fallback — it was never wired into any host, `ICatalogProvider` had no live implementation but
+  > itself, and reviving it would have meant rebuilding the wiring regardless. Reviving the *approach*
+  > remains possible; this decision record and git history are the specification.
 - ⚠️ DR-010 remains correct on everything else — product direction, the Newznab/SABnzbd surfaces, the
   provider/port abstraction, and the UI shrinking to configuration.
 
