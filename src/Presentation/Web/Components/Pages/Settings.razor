@@ -284,8 +284,9 @@
             Parallel downloads
             <input type="number" min="1" max="16" @bind="_maxConcurrent" />
             <span class="muted small">
-                Not honoured yet — downloads currently run one at a time
-                (<a href="https://github.com/Chrison-dev/Krautwatch/issues/51">#51</a>).
+                How many downloads run at once, <strong>per downloader process</strong>. Takes effect
+                within a few seconds — no restart. If you scale the downloader to several replicas,
+                each one gets this many.
             </span>
         </label>
 

@@ -1,4 +1,3 @@
-using Krautwatch.Agents.Downloader;
 using Krautwatch.Application;
 using Krautwatch.Application.Downloads;
 using Krautwatch.Domain.Interfaces;
@@ -32,7 +31,7 @@ builder.Services.AddSingleton(egressOptions.ProxyList);
 builder.Services.AddDownloadProvider();                 // the raw-MP4 / ffmpeg download engines
 builder.Services.AddEgressProxy();                      // geo-restricted egress selector
 builder.Services.AddScoped<RunDownloadHandler>();       // the Action — needs IDownloadProvider (this host only)
-builder.Services.AddHostedService<DownloadWorker>();    // claims + runs Queued jobs
+builder.Services.AddHostedService<DownloadSupervisor>(); // claims + runs Queued jobs, up to MaxConcurrentDownloads
 
 // Mode B (auto public proxy list) — the source + refresh scheduler, only when enabled.
 if (egressOptions.ProxyList.Enabled)
