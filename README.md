@@ -18,9 +18,13 @@ Built on .NET 10, Postgres, Wolverine and .NET Aspire.
 > Install it from the [latest release](../../releases/latest) — `docker-compose.yaml` and `env.example`
 > ship as release assets, and multi-arch images (amd64 + arm64) are on `ghcr.io/chrison-dev/`.
 >
-> **What is *not* there yet:** **Sonarr's own import step has never been proven** — everything up to it
-> has, against a real Sonarr 4.0.19, but the final hop needs Krautwatch and Sonarr to share a filesystem
-> (see [`KRAUTWATCH_DOWNLOADS`](#the-one-setting-that-matters-krautwatch_downloads)); **OIDC**
+> **The full round trip is proven** — grab → download → Sonarr import → file in the library, against
+> released images and a real Sonarr 4.0.19. Two setup blockers found doing it are still open, and both
+> stop a fresh install: a **daily series cannot be searched** ([#95](../../issues/95) — most German
+> public TV) and the **download client needs URL base `/sabnzbd`** ([#96](../../issues/96)), which the
+> instructions below do not yet say.
+>
+> **What is *not* there yet:** **OIDC**
 > ([#48](../../issues/48) — local login works, `oidc` is a stub); and **`*arr` reach-back** to pre-warm
 > the crawl list ([#6](../../issues/6) — optional by design, see DR-011).
 >

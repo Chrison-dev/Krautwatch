@@ -44,10 +44,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 >   breadth no longer depends on a full-catalog dump. The catalog is built **only** by the per-broadcaster
 >   crawler agents behind `IBroadcasterCrawler`, which is now the sole catalog extension point. DR-001 and
 >   DR-011 plus git history remain the specification if the filmliste approach is ever revived.
-> - **Sonarr has never been proven to actually import.** Every hop before it is demonstrated against a
->   real Sonarr 4.0.19 (search → grab → NZB accepted → download completes → path resolved). The import
->   itself needs the Downloader and Sonarr to share a filesystem; compose makes that possible but it has
->   not been run. See `docs/plans/2026-08-02 - beta readiness.md`.
+> - **Sonarr's import is proven** (2026-08-09, against released v0.2.1 images and Sonarr 4.0.19.2979):
+>   grab → download → queue → match → `downloadFolderImported`, with the library file in place and
+>   `/downloads` cleaned up. Evidence in `docs/plans/2026-08-02 - beta readiness.md`.
+> - **But a fresh install still cannot reproduce it unaided.** Two blockers found during that proof:
+>   **#95** — a *daily* series cannot be searched at all (Sonarr sends the air date as `season`/`ep`;
+>   our filter drops every dated episode, which is most German public TV); and **#96** — the SABnzbd
+>   surface lives at `/sabnzbd/api`, so the download client cannot be added by following our own docs.
 > - OIDC is **not** implemented — `Auth:Provider = oidc` is a stub. Local + `none` work (#48).
 > - Subtitles ship (#20): parsed from ARD and ZDF, persisted on `Episode.SubtitleUrl`, and fetched
 >   by the Downloader as `{video}.de.vtt`. Best-effort — a missing subtitle never fails the video.
