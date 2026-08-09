@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       ImageTag:
-        description: "Image Tag"
+        description: "Image tag to publish. Defaults to the build's own tag resolution when left blank."
         required: false
 
 jobs:
