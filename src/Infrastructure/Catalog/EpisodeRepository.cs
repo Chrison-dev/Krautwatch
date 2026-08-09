@@ -38,6 +38,25 @@ public class EpisodeRepository(AppDbContext db) : IEpisodeRepository
             .ToListAsync(ct);
     }
 
+    public async Task<IReadOnlyList<Episode>> GetByBroadcastDateAsync(
+        DateOnly date, CancellationToken ct = default)
+    {
+        // Compared as the *broadcast* date rather than UTC: a 20:30 Berlin broadcast is the same UTC day
+        // but a 01:00 one is the day before, and matching UTC would lose late-night shows entirely.
+        var from = new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddDays(-1);
+        var to = from.AddDays(3);
+
+        var window = await db.Episodes
+            .Include(e => e.Show).ThenInclude(s => s!.Channel)
+            .Include(e => e.Streams)
+            .Where(e => e.BroadcastDate >= from && e.BroadcastDate < to)
+            .ToListAsync(ct);
+
+        return window
+            .Where(e => DateOnly.FromDateTime(e.BroadcastDate.DateTime) == date)
+            .ToList();
+    }
+
     public async Task<IReadOnlyList<Episode>> GetRecentAsync(int limit, CancellationToken ct = default) =>
         await db.Episodes
             .Include(e => e.Show).ThenInclude(s => s.Channel)

@@ -13,7 +13,18 @@ public record SearchReleasesQuery(
     int? Season = null,
     int? Episode = null,
     int Limit = 100,
-    int? TvdbId = null);
+    int? TvdbId = null,
+    /// <summary>
+    /// Set when Sonarr asked for a <b>daily</b> episode — <c>season</c> is the year and <c>ep</c> is
+    /// <c>MM/DD</c> (#95). Matching is then on air date, not on numbering, because a dated episode has
+    /// no season or episode number at all.
+    /// </summary>
+    DateOnly? AirDate = null,
+    /// <summary>
+    /// True when a whole season was asked for. For a dated show that means a whole <i>year</i>, so the
+    /// season number is matched against either our numbering or the broadcast year.
+    /// </summary>
+    bool SeasonOnly = false);
 
 /// <summary>
 /// Serves Newznab results from the catalog, resolving against the broadcasters on demand when a search term
@@ -50,10 +61,18 @@ public class SearchReleasesHandler(
             if (byId.Count > 0)
                 return byId;
 
-            // The id is one we have not mapped yet. Fall through to the title search when Sonarr also sent
-            // one, rather than reporting "nothing exists" — an unmapped show is our gap, not an absent show.
+            // The id is one we have not mapped yet, and Sonarr sends **no title** alongside a tvdbid — so
+            // there is nothing to fall through to. Rather than report "nothing exists" for what is our
+            // own mapping gap, relax the query: for a daily search the air date alone identifies the
+            // episode well enough, and Sonarr re-parses every title and discards other shows. That is
+            // exactly how RSS-Sync already works against this indexer (#95).
             if (string.IsNullOrWhiteSpace(query.Q))
+            {
+                if (query.AirDate is { } airDate)
+                    return Project(await episodes.GetByBroadcastDateAsync(airDate, ct), query, limit);
+
                 return byId;
+            }
         }
 
         // RSS (no query) is never resolved: RSS-Sync polls constantly with no particular target, so
@@ -80,10 +99,29 @@ public class SearchReleasesHandler(
     private static List<Release> Project(IReadOnlyList<Episode> found, SearchReleasesQuery query, int limit)
     {
         IEnumerable<Episode> filtered = found;
-        if (query.Season is not null)
-            filtered = filtered.Where(e => e.SeasonNumber == query.Season);
-        if (query.Episode is not null)
-            filtered = filtered.Where(e => e.EpisodeNumber == query.Episode);
+
+        if (query.AirDate is { } airDate)
+        {
+            // Daily: match the date as *broadcast*, not as UTC. heute-show airs 20:30 Berlin, which is a
+            // different UTC day for part of the year — comparing UTC would silently shift late-night
+            // shows by one day and find nothing.
+            filtered = filtered.Where(e => DateOnly.FromDateTime(e.BroadcastDate.DateTime) == airDate);
+        }
+        else if (query.SeasonOnly && query.Season is { } season)
+        {
+            // "season=2026" is a season number for a numbered show and a year for a dated one, and the
+            // request alone cannot say which. Match either and let Sonarr's own parser discard the rest —
+            // it re-parses every title regardless, so a superset costs noise, not correctness.
+            filtered = filtered.Where(e =>
+                e.SeasonNumber == season || e.BroadcastDate.Year == season);
+        }
+        else
+        {
+            if (query.Season is not null)
+                filtered = filtered.Where(e => e.SeasonNumber == query.Season);
+            if (query.Episode is not null)
+                filtered = filtered.Where(e => e.EpisodeNumber == query.Episode);
+        }
 
         return filtered.Take(limit).Select(ReleaseMapper.ToRelease).ToList();
     }
@@ -102,10 +140,24 @@ public class SearchReleasesHandler(
         int limit)
     {
         IEnumerable<NumberedEpisode> filtered = found;
-        if (query.Season is not null)
-            filtered = filtered.Where(e => e.Season == query.Season);
-        if (query.Episode is not null)
-            filtered = filtered.Where(e => e.Number == query.Episode);
+
+        // A dated show has no TVDB numbering to filter on either, so the air date is still the key.
+        if (query.AirDate is { } airDate)
+        {
+            filtered = filtered.Where(e =>
+                DateOnly.FromDateTime(e.Episode.BroadcastDate.DateTime) == airDate);
+        }
+        else if (query.SeasonOnly && query.Season is { } season)
+        {
+            filtered = filtered.Where(e => e.Season == season || e.Episode.BroadcastDate.Year == season);
+        }
+        else
+        {
+            if (query.Season is not null)
+                filtered = filtered.Where(e => e.Season == query.Season);
+            if (query.Episode is not null)
+                filtered = filtered.Where(e => e.Number == query.Episode);
+        }
 
         return filtered
             .Take(limit)

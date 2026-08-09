@@ -47,6 +47,13 @@ public interface IEpisodeRepository
     Task<IReadOnlyList<Episode>> GetRecentAsync(int limit, CancellationToken ct = default);
 
     /// <summary>
+    /// Episodes broadcast on a given day, across all shows. Backs the daily search when Sonarr asks by
+    /// an id we have not mapped: it sends no title to search by, so the air date is the only handle we
+    /// have (#95). Sonarr re-parses every title and discards other shows, so a superset is safe.
+    /// </summary>
+    Task<IReadOnlyList<Episode>> GetByBroadcastDateAsync(DateOnly date, CancellationToken ct = default);
+
+    /// <summary>
     /// Episodes of shows mapped to a TVDB id. This is the reliable lookup: Sonarr asks by id, so we answer
     /// by id rather than re-parsing titles.
     /// </summary>

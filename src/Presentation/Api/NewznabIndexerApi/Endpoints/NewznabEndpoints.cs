@@ -24,8 +24,10 @@ public static class NewznabEndpoints
         IConfiguration config,
         string? t,
         string? q,
-        int? season,
-        int? ep,
+        string? season,
+        // Bound as strings, not ints: Sonarr's daily form is `season=2026&ep=06/05`, and an `int` binding
+        // made every daily search a 400 before the request ever reached us (#95).
+        string? ep,
         int? tvdbid,
         string? apikey,
         int? limit,
@@ -41,7 +43,7 @@ public static class NewznabEndpoints
                 if (!ApiKeyGuard.IsAuthorized(config, apikey)) return Denied();
 
                 var releases = await search.HandleAsync(
-                    new SearchReleasesQuery(q, season, ep, limit ?? 100, tvdbid), ct);
+                    ToQuery(q, season, ep, limit, tvdbid), ct);
 
                 var baseUrl = $"{http.Request.Scheme}://{http.Request.Host}";
                 var key = ApiKeyGuard.Configured(config);
@@ -92,4 +94,23 @@ public static class NewznabEndpoints
         Results.Json(new { error = new { code = 100, description = "Incorrect or missing API key." } }, statusCode: 401);
 
     private static IResult Xml(string xml) => Results.Content(xml, "application/xml");
+
+    /// <summary>
+    /// Builds the search query, reading the standard/daily/season regime off the request shape rather
+    /// than looking the show up — see <see cref="NewznabEpisodeQuery"/>.
+    /// </summary>
+    private static SearchReleasesQuery ToQuery(
+        string? q, string? season, string? ep, int? limit, int? tvdbid)
+    {
+        var parsed = NewznabEpisodeQuery.Parse(season, ep);
+
+        return new SearchReleasesQuery(
+            Q: q,
+            Season: parsed.Season,
+            Episode: parsed.Episode,
+            Limit: limit ?? 100,
+            TvdbId: tvdbid,
+            AirDate: parsed.AirDate,
+            SeasonOnly: parsed.IsSeasonOnly);
+    }
 }
