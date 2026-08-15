@@ -9,30 +9,29 @@
 #
 #     - To trigger manual generation invoke:
 #
-#         fallout --generate-configuration GitHubActions_build --host GitHubActions
+#         fallout --generate-configuration GitHubActions_publish-edge --host GitHubActions
 #
 # </auto-generated>
 # ------------------------------------------------------------------------------
 
-name: build
+name: publish-edge
 
 on:
   push:
     branches:
       - develop
-      - main
-  pull_request:
-    branches:
-      - develop
-      - main
-      - 'release/*'
-      - 'hotfix/*'
-      - 'support/*'
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+
+concurrency:
+  group: ${{ github.workflow }}
 
 jobs:
   ubuntu-latest:
     name: ubuntu-latest
     runs-on: ubuntu-latest
+    environment: ghcr
     steps:
       - uses: actions/checkout@v7
         with:
@@ -50,5 +49,8 @@ jobs:
           global-json-file: global.json
       - name: 'Restore: dotnet tools'
         run: dotnet tool restore
-      - name: 'Run: Test'
-        run: dotnet fallout Test
+      - name: 'Run: PushEdge'
+        run: dotnet fallout PushEdge
+        env:
+          RegistryUser: ${{ secrets.REGISTRY_USER }}
+          RegistryPassword: ${{ secrets.REGISTRY_PASSWORD }}

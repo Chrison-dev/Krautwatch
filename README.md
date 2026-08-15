@@ -386,12 +386,17 @@ pinned as a local dotnet tool, so run `dotnet tool restore` once on a fresh clon
 ./build.sh TestLive    # + Live.Tests — real ARD/ZDF crawls and downloads (~5 min, needs network)
 ```
 
-The GitHub Actions workflows under `.github/workflows/` are **generated** from the `[GitHubActions]`
-attributes on the build class — edit `build/Build.cs`, not the YAML, or your change is overwritten:
+**The whole CI/CD pipeline is Fallout.** Every workflow under `.github/workflows/` is *generated*
+from the `[GitHubActions]` attributes in [`build/Build.CI.GitHubActions.cs`](build/Build.CI.GitHubActions.cs),
+and each one only provisions a runner and invokes a target — the gate runs `Test`, the trunk runs
+`PushEdge`, a tag runs `PushGhcr` and `GitHubRelease`. Edit the attribute, not the YAML, or your
+change is overwritten:
 
 ```bash
-dotnet fallout --generate-configuration GitHubActions_build --host GitHubActions
+./build.sh --generate-configuration GitHubActions_build --host GitHubActions
 ```
+
+See [`docs/ci.md`](docs/ci.md) for what runs when, and why.
 
 `Test` needs **Docker running**: the repository tests execute against a real Postgres container
 (Testcontainers) rather than an in-memory stand-in, so provider behaviour matches production.
@@ -409,6 +414,33 @@ dotnet ef migrations add <Name> --project src/Infrastructure --context AppDbCont
 ```
 
 `Presentation/Migrator` applies them at fleet startup.
+
+---
+
+## Contributing
+
+The repo runs **GitFlow**: `develop` is the default branch and the integration trunk, `main` is what
+is released, and every release is a `v*` tag on `main`.
+
+```bash
+git switch develop && git pull --ff-only
+git switch -c feat/my-change
+./build.sh Test
+gh pr create --base develop --label enhancement      # one category label — the labels are the changelog
+```
+
+- [`docs/branching-and-release.md`](docs/branching-and-release.md) — the branch model, where a fix
+  belongs, protection and merge methods
+- [`docs/ci.md`](docs/ci.md) — what CI runs and why there is no hand-written YAML here
+- [`docs/releasing.md`](docs/releasing.md) — channels and the release runbooks
+- [`docs/agents/issue-and-pr-style.md`](docs/agents/issue-and-pr-style.md) — how issues and PRs are
+  written
+
+### Running the trunk
+
+Every push to `develop` republishes the images as `:edge` (multi-arch, GHCR). Point an existing
+deployment's `.env` at that tag to follow along — it moves under you, migrations included, and
+downgrading back to a release is not supported, so back up first.
 
 ---
 

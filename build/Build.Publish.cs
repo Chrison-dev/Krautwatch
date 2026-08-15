@@ -56,6 +56,9 @@ partial class Build
 
     AbsolutePath ComposeDirectory => RootDirectory / ".artifacts" / "compose";
 
+    /// <summary>Set by <see cref="PushEdge"/>; wins over every other tag resolution.</summary>
+    string _tagOverride;
+
     /// <summary>
     /// The tag the images are published under.
     /// </summary>
@@ -74,6 +77,11 @@ partial class Build
     {
         get
         {
+            // An edge build runs off a branch, where the resolutions below would answer "dev" —
+            // the point of the channel is that it has its own, stable, name.
+            if (!string.IsNullOrWhiteSpace(_tagOverride))
+                return _tagOverride;
+
             if (!string.IsNullOrWhiteSpace(ImageTag))
                 return ImageTag;
 
@@ -180,6 +188,29 @@ partial class Build
         .Executes(() =>
         {
             _targetRegistry = "ghcr.io";
+            PushImages();
+        });
+
+    /// <summary>The rolling tag the trunk publishes under.</summary>
+    /// <remarks>
+    /// Not "latest": that name is conventionally the newest <i>stable</i> image, and a compose file
+    /// left on the default tag would silently follow the trunk. Anyone running <c>:edge</c> has
+    /// typed the word.
+    /// </remarks>
+    const string EdgeTag = "edge";
+
+    Target PushEdge => _ => _
+        .Description($"Push the rolling ':{EdgeTag}' images to GHCR — CI target for pushes to the trunk")
+        .DependsOn(Compile)
+        .Requires(() => RegistryUser)
+        .Requires(() => RegistryPassword)
+        .Executes(() =>
+        {
+            // The images are the whole channel — there is no separate release artefact to attach,
+            // as there would be for a versioned release. A tester points their existing .env at
+            // :edge (docs/releasing.md#the-edge-channel) and pulls.
+            _targetRegistry = "ghcr.io";
+            _tagOverride = EdgeTag;
             PushImages();
         });
 
