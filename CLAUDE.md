@@ -180,12 +180,27 @@ so `dotnet tool restore` first on a fresh clone:
 dotnet fallout Test      # same thing via the tool, which is what CI invokes
 ```
 
-> **`.github/workflows/*.yml` is GENERATED — never hand-edit it.** The workflow is emitted from the
-> `[GitHubActions]` attributes on `Build`; editing the YAML directly is silently overwritten on the next
-> generation. Change the attribute, then regenerate:
+> **`.github/workflows/*.yml` is GENERATED — never hand-edit it.** All five workflows are emitted from
+> the `[GitHubActions]` attributes in **`build/Build.CI.GitHubActions.cs`** (they moved out of `Build.cs`,
+> which is now just targets); editing the YAML directly is silently overwritten on the next generation.
+> Change the attribute, then regenerate — once per workflow:
 > ```bash
 > dotnet fallout --generate-configuration GitHubActions_build --host GitHubActions
+> # …and publish-edge · publish-ghcr · publish-release · publish-dockerhub
 > ```
+
+### Branching — GitFlow (2026-08-16)
+
+`develop` is the **default branch and integration trunk**; `main` is production and is the only branch
+tagged `v*`. Work goes `feat|fix|chore|docs/*` → PR into `develop`. A release is `develop` (or a
+`release/*` window) rebase-merged into `main`, then tagged. `hotfix/*` is cut from `main` and **must**
+be ported back to `develop`.
+
+- Every non-docs push to `develop` republishes the images as `:edge` (`PushEdge`).
+- `GitHubRelease` **refuses** a tag that is not reachable from `main` or `support/*` — the trunk is
+  never tagged for release.
+- Full model in [`docs/branching-and-release.md`](docs/branching-and-release.md), pipeline in
+  [`docs/ci.md`](docs/ci.md), runbooks in [`docs/releasing.md`](docs/releasing.md).
 
 **`Test` needs Docker running** — `Infrastructure.Tests` spins up a Postgres container
 (Testcontainers) shared across its repository fixtures via `PostgresCollection`.
