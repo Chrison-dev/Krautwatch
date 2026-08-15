@@ -56,6 +56,21 @@ ARD/ZDF tests are excluded on purpose: they hit real broadcasters, drift, and ra
 that included them would fail for reasons that have nothing to do with the PR. Run them deliberately
 with `./build.sh TestLive`.
 
+### Every workflow reports the same check name
+
+The generator names a job after its runner image, so **all five workflows produce a check called
+`ubuntu-latest`**. There is no job-name property in Fallout 10.4 to change that.
+
+In practice it only shows up in one place. A PR from a working branch has a head SHA that only the
+gate ran on, so its check list is clean. A **release PR from `develop`** has a head SHA that
+`publish-edge` also ran on, so the PR lists the gate's check *and* the edge publish's, both under
+the same name — and GitHub requires every check with that name to pass.
+
+That is a defensible thing to be blocked by (don't cut a release from a commit whose images
+wouldn't publish), so it stays. If it ever stops being defensible, `GetJobs` on
+`GitHubActionsAttribute` is `protected virtual` — a subclass carrying a `JobName` is the fix, and
+the required-check context in the ruleset moves with it.
+
 ### Why there are no path filters on the gate
 
 Excluding `**/*.md` looks like free savings and is a trap. The job name *is* the required status
