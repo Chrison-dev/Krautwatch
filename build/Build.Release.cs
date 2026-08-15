@@ -76,6 +76,7 @@ partial class Build
         .Executes(() =>
         {
             AssertTagged();
+            AssertReleasableRef();
             AssertImagesPublishedForThisCommit();
 
             var assets = new[] { ReleaseDirectory / "docker-compose.yaml", ReleaseDirectory / EnvTemplateName };
@@ -103,6 +104,55 @@ partial class Build
     void AssertTagged() =>
         Assert.NotNullOrEmpty(ReleaseTag,
             "No tag points at HEAD — a release must be cut from a tagged commit.");
+
+    /// <summary>
+    /// Fails unless the tagged commit is reachable from <c>main</c> or a <c>support/*</c> line.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Under GitFlow the trunk is never tagged for release — <c>develop</c> ships through the edge
+    /// channel, and a release comes from <c>main</c> after a stabilisation window
+    /// (docs/branching-and-release.md). Without this check that rule is documentation only, and
+    /// breaking it is silent: a <c>v*</c> tag anywhere publishes real images and a real release
+    /// from code that never went through <c>main</c>.
+    /// </para>
+    /// <para>
+    /// The remote refs are fetched first because a tag build checks out a detached HEAD and the
+    /// runner may know no branch refs at all — in which case an unfetched containment check would
+    /// report "not on main" for a tag that plainly is. A failed fetch is left to the assertion to
+    /// report rather than short-circuiting here, so an offline local run says "not reachable from
+    /// main" rather than something about the network.
+    /// </para>
+    /// </remarks>
+    void AssertReleasableRef()
+    {
+        ProcessTasks.StartProcess("git",
+                "fetch --quiet origin " +
+                $"+refs/heads/{MainBranch}:refs/remotes/origin/{MainBranch} " +
+                $"+refs/heads/{SupportBranchPattern}:refs/remotes/origin/{SupportBranchPattern}",
+                RootDirectory, logOutput: false)
+            .WaitForExit();
+
+        var probe = ProcessTasks.StartProcess("git", $"branch --remotes --contains {ReleaseTag}",
+            RootDirectory, logOutput: false);
+        probe.WaitForExit();
+
+        var branches = probe.Output
+            .Select(x => x.Text.Trim())
+            .Where(x => x.Length > 0)
+            .ToList();
+
+        var releasable = branches.Any(branch =>
+            branch == $"origin/{MainBranch}" ||
+            branch.StartsWith($"origin/{SupportBranchPattern.TrimEnd('*')}", StringComparison.Ordinal));
+
+        Assert.True(releasable,
+            $"{ReleaseTag} is not reachable from origin/{MainBranch} or a support line — it is on " +
+            $"[{string.Join(", ", branches)}]. Releases are cut from {MainBranch}; the trunk ships " +
+            "through the edge channel. See docs/branching-and-release.md.");
+
+        Log.Information("{Tag} is reachable from {Branches}", ReleaseTag, string.Join(", ", branches));
+    }
 
     /// <summary>
     /// The env template's filename, without a leading dot.

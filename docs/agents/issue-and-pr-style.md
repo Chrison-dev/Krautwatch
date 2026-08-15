@@ -7,6 +7,11 @@ which is the fuller version.
 Goal: terse and scannable. A reader should get the point on the first screen, on
 a phone, without scrolling.
 
+**Base branch: `develop`.** It is the default, so `gh pr create` targets it
+without `--base`; pass `--base` explicitly anyway when you mean `main` or a
+support line, so the intent is on the record. See
+[branching-and-release.md](../branching-and-release.md).
+
 ## PR titles
 
 A PR title is a changelog line. It is read months later, out of context, in
