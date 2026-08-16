@@ -12,7 +12,6 @@ using Krautwatch.Infrastructure.Persistence;
 using Krautwatch.Infrastructure.Proxies;
 using Krautwatch.Infrastructure.Secrets;
 using Krautwatch.Infrastructure.Settings;
-using Krautwatch.Infrastructure.System;
 using Krautwatch.Infrastructure.Tvdb;
 using Tvdb.Abstractions;
 using Microsoft.Extensions.Configuration;
@@ -48,9 +47,6 @@ public static class InfrastructureServiceExtensions
         DbProviderOptions dbOptions)
     {
         services.AddDbContext<AppDbContext>(options => ConfigureProvider(options, dbOptions));
-
-        // System status — singleton, written by jobs/agents, read by the API
-        services.AddSingleton<SystemStatusService>();
 
         // File naming for downloads
         services.AddSingleton<FileNamingService>();
