@@ -365,8 +365,20 @@ The single most common failure, and almost always storage rather than Krautwatch
 ### Downloads fail immediately
 
 - Geo-restricted content with no proxy configured fails fast on purpose (§8).
-- ZDF changing its API auth key breaks ZDF crawling until Krautwatch is updated
-  ([#13](https://github.com/Chrison-dev/Krautwatch/issues/13)).
+
+### Only ZDF stopped producing anything
+
+ZDF authenticates with a static bearer that ZDF rotates without notice. When it changes, the agent logs
+
+```
+error: ZDF API rejected our Api-Auth key (401) — it has most likely been rotated.
+```
+
+and its `/health` reports **degraded** (still HTTP 200 — a restart cannot fix a rotated key, so it
+deliberately does not fail the container's health probe). ARD and KiKA are unaffected.
+
+Fix it without waiting for a release: set `Zdf__ApiAuthKey` to the current value — the one ZDF's own
+web player sends — on the ZDF agent and the Newznab API, then restart both.
 
 ### A settings row shows an API-key problem
 

@@ -1,4 +1,7 @@
+using System.Net;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Krautwatch.Infrastructure.Crawling.Zdf;
 
@@ -13,15 +16,23 @@ public sealed record ZdfStream(
 /// <summary>
 /// Reads the ZDF Mediathek API. Search is the REST <c>/search/documents?q=</c> endpoint
 /// (episodes come back directly); a stream is resolved episode-doc → <c>ptmd-template</c>
-/// (expand <c>{playerId}</c>) → PTMD <c>priorityList</c> → progressive MP4. All requests carry
-/// the static <c>Api-Auth: Bearer &lt;key&gt;</c> — ZDF rotates it; update on 401/403 (DR-010 / #13,#16).
+/// (expand <c>{playerId}</c>) → PTMD <c>priorityList</c> → progressive MP4. All requests carry a
+/// static <c>Api-Auth: Bearer &lt;key&gt;</c>, which ZDF rotates — see <see cref="ZdfOptions"/>
+/// (DR-010 / #13, #16).
 /// </summary>
-public sealed class ZdfCatalogClient(HttpClient http)
+public sealed class ZdfCatalogClient(
+    HttpClient http,
+    ZdfOptions? options = null,
+    ZdfAuthState? authState = null,
+    ILogger<ZdfCatalogClient>? logger = null)
 {
     public const string ApiBase = "https://api.zdf.de";
-    // Rotates when ZDF ships a new API version — update if requests start returning 401/403.
-    private const string AuthKey = "aa3noh4ohz9eeboo8shiesheec9ciequ9Quah7el";
     private const string PlayerId = "android_native_6";
+
+    // Defaults keep the client newable in tests and live tests, where the key is not the subject.
+    private readonly ZdfOptions _options = options ?? new ZdfOptions();
+    private readonly ZdfAuthState _authState = authState ?? new ZdfAuthState();
+    private readonly ILogger _logger = logger ?? NullLogger<ZdfCatalogClient>.Instance;
 
     private const string RelResults = "http://zdf.de/rels/search/results";
     private const string RelTarget = "http://zdf.de/rels/target";
@@ -192,15 +203,41 @@ public sealed class ZdfCatalogClient(HttpClient http)
     private static string? Str(JsonElement e, string prop) =>
         e.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
+    /// <summary>
+    /// GETs a ZDF document, retrying transient failures.
+    /// </summary>
+    /// <remarks>
+    /// A 401/403 is <b>not</b> transient and is not retried: the key is either accepted or it is not,
+    /// so two further attempts only slow every crawl down before failing anyway. It throws rather than
+    /// returning null, because null here means "nothing to crawl" — which is exactly how a rotated key
+    /// used to turn a broken indexer into a silent one (#13).
+    /// </remarks>
     private async Task<JsonDocument?> GetJsonAsync(string url, CancellationToken ct)
     {
         for (var attempt = 1; ; attempt++)
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            req.Headers.TryAddWithoutValidation("Api-Auth", $"Bearer {AuthKey}");
+            req.Headers.TryAddWithoutValidation("Api-Auth", $"Bearer {_options.ApiAuthKey}");
             using var resp = await http.SendAsync(req, ct);
+
             if (resp.IsSuccessStatusCode)
+            {
+                _authState.RecordSuccess();
                 return await JsonDocument.ParseAsync(await resp.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+            }
+
+            if (resp.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+            {
+                _authState.RecordRejection(resp.StatusCode, DateTimeOffset.UtcNow);
+
+                _logger.LogError(
+                    "ZDF API rejected our Api-Auth key ({StatusCode}) — it has most likely been rotated. " +
+                    "Set {Section}:{Setting} to the current value. ZDF crawling produces nothing until then.",
+                    (int)resp.StatusCode, ZdfOptions.SectionName, nameof(ZdfOptions.ApiAuthKey));
+
+                throw new ZdfAuthRejectedException(resp.StatusCode);
+            }
+
             if (attempt >= 3) return null;
             await Task.Delay(TimeSpan.FromMilliseconds(400 * attempt), ct);
         }

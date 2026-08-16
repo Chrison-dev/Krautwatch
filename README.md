@@ -193,6 +193,30 @@ ARD/KiKA; `heute-show` on ZDF):
 }
 ```
 
+### If ZDF stops returning anything
+
+ZDF's API authenticates with a static bearer that **ZDF rotates without notice**. Krautwatch ships the
+current one, so there is nothing to configure until the day it changes — at which point every ZDF crawl
+starts getting a 401:
+
+```
+error: ZDF API rejected our Api-Auth key (401) — it has most likely been rotated.
+       Set Zdf:ApiAuthKey to the current value. ZDF crawling produces nothing until then.
+```
+
+The ZDF agent's `/health` also goes **degraded** (amber in the Aspire dashboard; still HTTP 200, so it
+won't restart-loop your container). Recovery is a config change and a restart, not a rebuild:
+
+```
+Zdf__ApiAuthKey=<the current value>      # environment variable
+```
+
+```jsonc
+{ "Zdf": { "ApiAuthKey": "…" } }         // or appsettings
+```
+
+The value is public — it is what ZDF's own web player sends.
+
 ### Authentication
 
 The UI requires a sign-in. `Auth:Provider` selects how:
