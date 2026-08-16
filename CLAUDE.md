@@ -160,7 +160,11 @@ Presentation/
 > `Web/Components/Pages/` — `Home · Search · Activity · Settings · Mappings · Login · Logout · Setup`.
 
 Each host is an **independently deployable microservice** from day one. **Adding a broadcaster** =
-a new `Application/<Broadcaster>` slice + an Infrastructure HTTP client + a `Presentation/Agents/<Broadcaster>` host.
+an Infrastructure HTTP client + an `IBroadcasterCrawler` adapter + a `Presentation/Agents/<Broadcaster>`
+host — **no new Application slice**: `Application/Crawling` is shared and selects a crawler by provider
+key. The four registrations that are easy to miss (slnx · AppHost · `Build.Publish` Services ·
+the Newznab host's on-demand block, without which search never reaches the new broadcaster) are in
+[`docs/adding-a-broadcaster.md`](docs/adding-a-broadcaster.md).
 
 ### Enforced
 
