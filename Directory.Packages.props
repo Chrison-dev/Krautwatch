@@ -60,9 +60,12 @@
   </ItemGroup>
 
   <ItemGroup Label="TheTVDB — first-party client (Chrison-dev/TvdbApi), used rather than hand-rolled">
-    <PackageVersion Include="TvdbClient"              Version="4.7.12" />
-    <PackageVersion Include="TvdbClient.Abstractions" Version="4.7.12" />
-    <PackageVersion Include="TvdbClient.Models"       Version="4.7.12" />
+    <!-- 4.7.13 moves its Scrutor.Extensions.HttpClient dependency to 7.0.1, whose
+         Microsoft.Extensions.Http range is [9.0.0, 11.0.0). 4.7.12 carried the 5.0.1 range that
+         stopped below 10.0.0, which is what made every project here report NU1608. -->
+    <PackageVersion Include="TvdbClient"              Version="4.7.13" />
+    <PackageVersion Include="TvdbClient.Abstractions" Version="4.7.13" />
+    <PackageVersion Include="TvdbClient.Models"       Version="4.7.13" />
   </ItemGroup>
 
   <ItemGroup Label="Compression">
