@@ -153,8 +153,14 @@ Point both at the `newznab` host (take its URL from the Aspire dashboard).
 GET /api?t=caps                              # capabilities (always open, so Prowlarr can probe)
 GET /api?t=tvsearch&q=heute-show&apikey=…    # RSS 2.0 + newznab: attrs
 GET /api?t=search&q=…&apikey=…
+GET /api?t=search&apikey=…                   # no query = the recent-releases feed RSS-Sync polls
+GET /api?t=search&offset=100&limit=50&…      # paged, for catching up after downtime
 GET /download?…                              # opaque per-episode token → the grab
 ```
+
+Every response carries `<newznab:response offset total/>`, so a client knows where it is and when to
+stop. Item GUIDs are the stable episode id (`{broadcaster}:{native-id}`), unchanged by a re-crawl —
+which is what stops Sonarr grabbing the same episode twice.
 
 **As a download client** — add a *SABnzbd* client pointing at the same host. Supported modes:
 `version`, `get_config`, `addurl`, `addfile`, `queue`, `history`.

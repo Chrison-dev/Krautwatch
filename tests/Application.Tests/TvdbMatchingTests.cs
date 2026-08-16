@@ -54,8 +54,8 @@ public class TvdbMatchingTests
         var episodes = Substitute.For<IEpisodeRepository>();
         episodes.GetByTvdbIdAsync(255986, Arg.Any<CancellationToken>()).Returns([Ep("ard:1", 255986)]);
 
-        var result = await new SearchReleasesHandler(episodes).HandleAsync(
-            new SearchReleasesQuery(TvdbId: 255986), TestContext.Current.CancellationToken);
+        var result = (await new SearchReleasesHandler(episodes).HandleAsync(
+            new SearchReleasesQuery(TvdbId: 255986), TestContext.Current.CancellationToken)).Releases;
 
         result.ShouldHaveSingleItem().TvdbId.ShouldBe(255986);
         await episodes.DidNotReceive().SearchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -70,8 +70,8 @@ public class TvdbMatchingTests
         episodes.GetByTvdbIdAsync(999999, Arg.Any<CancellationToken>()).Returns([]);
         episodes.SearchAsync("extra 3", Arg.Any<CancellationToken>()).Returns([Ep("ard:1", null)]);
 
-        var result = await new SearchReleasesHandler(episodes).HandleAsync(
-            new SearchReleasesQuery(Q: "extra 3", TvdbId: 999999), TestContext.Current.CancellationToken);
+        var result = (await new SearchReleasesHandler(episodes).HandleAsync(
+            new SearchReleasesQuery(Q: "extra 3", TvdbId: 999999), TestContext.Current.CancellationToken)).Releases;
 
         result.ShouldHaveSingleItem();
         await episodes.Received(1).SearchAsync("extra 3", Arg.Any<CancellationToken>());
@@ -83,8 +83,8 @@ public class TvdbMatchingTests
         var episodes = Substitute.For<IEpisodeRepository>();
         episodes.GetByTvdbIdAsync(999999, Arg.Any<CancellationToken>()).Returns([]);
 
-        var result = await new SearchReleasesHandler(episodes).HandleAsync(
-            new SearchReleasesQuery(TvdbId: 999999), TestContext.Current.CancellationToken);
+        var result = (await new SearchReleasesHandler(episodes).HandleAsync(
+            new SearchReleasesQuery(TvdbId: 999999), TestContext.Current.CancellationToken)).Releases;
 
         result.ShouldBeEmpty();
         await episodes.DidNotReceive().SearchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -98,9 +98,9 @@ public class TvdbMatchingTests
             [Ep("kika:1", 266275, season: 2, episode: 51),
              Ep("kika:2", 266275, season: 2, episode: 52)]);
 
-        var result = await new SearchReleasesHandler(episodes).HandleAsync(
+        var result = (await new SearchReleasesHandler(episodes).HandleAsync(
             new SearchReleasesQuery(Season: 2, Episode: 52, TvdbId: 266275),
-            TestContext.Current.CancellationToken);
+            TestContext.Current.CancellationToken)).Releases;
 
         result.ShouldHaveSingleItem().Episode.ShouldBe(52);
     }
@@ -110,10 +110,11 @@ public class TvdbMatchingTests
     {
         // No query and no id: still the recent-releases feed that RSS-Sync polls.
         var episodes = Substitute.For<IEpisodeRepository>();
-        episodes.GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns([Ep("ard:1", null)]);
+        episodes.GetRecentAsync(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns([Ep("ard:1", null)]);
 
-        var result = await new SearchReleasesHandler(episodes).HandleAsync(
-            new SearchReleasesQuery(), TestContext.Current.CancellationToken);
+        var result = (await new SearchReleasesHandler(episodes).HandleAsync(
+            new SearchReleasesQuery(), TestContext.Current.CancellationToken)).Releases;
 
         result.ShouldHaveSingleItem();
         await episodes.DidNotReceive().GetByTvdbIdAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());

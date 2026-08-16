@@ -43,8 +43,24 @@ public interface IEpisodeRepository
 {
     Task<Episode?> GetByIdAsync(string id, CancellationToken ct = default);
     Task<IReadOnlyList<Episode>> SearchAsync(string query, CancellationToken ct = default);
-    // Newest episodes first — the Newznab RSS feed (no query) reads from here.
-    Task<IReadOnlyList<Episode>> GetRecentAsync(int limit, CancellationToken ct = default);
+    /// <summary>
+    /// Newest episodes first — the Newznab RSS feed (no query) reads from here.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="offset"/> is what lets an RSS client catch up after downtime by paging back
+    /// through history. Implementations must order <b>totally</b>, not just by recency: episodes
+    /// routinely share a broadcast date, and one whose air date could not be parsed gets
+    /// <see cref="DateTimeOffset.MinValue"/>, so an ordering that leaves ties unresolved lets the
+    /// database return them in a different order per query — which silently skips and duplicates rows
+    /// across pages (#12).
+    /// </remarks>
+    Task<IReadOnlyList<Episode>> GetRecentAsync(int offset, int limit, CancellationToken ct = default);
+
+    /// <summary>
+    /// How many episodes exist, for the RSS feed's <c>newznab:response@total</c> — a paging client
+    /// needs it to know when to stop.
+    /// </summary>
+    Task<int> CountAsync(CancellationToken ct = default);
 
     /// <summary>
     /// Episodes broadcast on a given day, across all shows. Backs the daily search when Sonarr asks by

@@ -57,12 +57,21 @@ public class EpisodeRepository(AppDbContext db) : IEpisodeRepository
             .ToList();
     }
 
-    public async Task<IReadOnlyList<Episode>> GetRecentAsync(int limit, CancellationToken ct = default) =>
+    public async Task<IReadOnlyList<Episode>> GetRecentAsync(
+        int offset, int limit, CancellationToken ct = default) =>
         await db.Episodes
             .Include(e => e.Show).ThenInclude(s => s.Channel)
             .OrderByDescending(e => e.BroadcastDate)
+            // The tiebreaker is not decoration: OFFSET/LIMIT over a non-total order is free to return
+            // a row on two pages and another on none. Ties are common here — same-day episodes, and
+            // every episode whose air date we could not parse sharing DateTimeOffset.MinValue. Id is
+            // unique and stable ("{provider}:{nativeId}"), so it makes the order deterministic (#12).
+            .ThenByDescending(e => e.Id)
+            .Skip(offset)
             .Take(limit)
             .ToListAsync(ct);
+
+    public Task<int> CountAsync(CancellationToken ct = default) => db.Episodes.CountAsync(ct);
 
     public async Task<IReadOnlyList<Episode>> GetByChannelAsync(
         string channelId,

@@ -21,10 +21,33 @@ public record SearchReleasesQuery(
     /// </summary>
     DateOnly? AirDate = null,
     /// <summary>
+    /// Newznab's <c>offset</c> — how many results to skip. Used by an RSS client catching up after
+    /// downtime, which pages back through history rather than re-reading the first page (#12).
+    /// </summary>
+    int Offset = 0,
+    /// <summary>
     /// True when a whole season was asked for. For a dated show that means a whole <i>year</i>, so the
     /// season number is matched against either our numbering or the broadcast year.
     /// </summary>
     bool SeasonOnly = false);
+
+/// <summary>
+/// One page of Newznab results, with what the <c>newznab:response</c> element needs to describe it.
+/// </summary>
+/// <param name="Releases">The releases on this page.</param>
+/// <param name="Offset">Where this page starts in the overall result set.</param>
+/// <param name="Total">
+/// How many results exist in total. Exact for the RSS feed, which is the path that gets paged; for a
+/// search it is <c>Offset + Releases.Count</c> — the honest conservative answer, since we cap a search
+/// at <c>limit</c> without counting the rest, and reporting more would send a client paging after
+/// results we never promised.
+/// </param>
+public readonly record struct ReleasePage(IReadOnlyList<Release> Releases, int Offset, int Total)
+{
+    /// <summary>A page that is also the last one — the total is what we have returned.</summary>
+    public static ReleasePage Last(IReadOnlyList<Release> releases, int offset) =>
+        new(releases, offset, offset + releases.Count);
+}
 
 /// <summary>
 /// Serves Newznab results from the catalog, resolving against the broadcasters on demand when a search term
@@ -39,7 +62,7 @@ public class SearchReleasesHandler(
     OnDemandResolver? resolver = null,
     TvdbShowResolver? tvdbResolver = null)
 {
-    public async Task<IReadOnlyList<Release>> HandleAsync(SearchReleasesQuery query, CancellationToken ct = default)
+    public async Task<ReleasePage> HandleAsync(SearchReleasesQuery query, CancellationToken ct = default)
     {
         var limit = Math.Clamp(query.Limit, 1, 500);
 
@@ -54,12 +77,12 @@ public class SearchReleasesHandler(
                 var resolved = await tvdbResolver.ResolveAsync(query.TvdbId.Value, ct);
                 var numbered = Project(resolved.Episodes, query, limit);
                 if (numbered.Count > 0)
-                    return numbered;
+                    return ReleasePage.Last(numbered, query.Offset);
             }
 
             var byId = Project(await episodes.GetByTvdbIdAsync(query.TvdbId.Value, ct), query, limit);
             if (byId.Count > 0)
-                return byId;
+                return ReleasePage.Last(byId, query.Offset);
 
             // The id is one we have not mapped yet, and Sonarr sends **no title** alongside a tvdbid — so
             // there is nothing to fall through to. Rather than report "nothing exists" for what is our
@@ -69,9 +92,11 @@ public class SearchReleasesHandler(
             if (string.IsNullOrWhiteSpace(query.Q))
             {
                 if (query.AirDate is { } airDate)
-                    return Project(await episodes.GetByBroadcastDateAsync(airDate, ct), query, limit);
+                    return ReleasePage.Last(
+                        Project(await episodes.GetByBroadcastDateAsync(airDate, ct), query, limit),
+                        query.Offset);
 
-                return byId;
+                return ReleasePage.Last(byId, query.Offset);
             }
         }
 
@@ -79,21 +104,32 @@ public class SearchReleasesHandler(
         // resolving here would mean crawling on a timer for nothing specific. Per DR-011 it serves the
         // standing crawl list.
         if (string.IsNullOrWhiteSpace(query.Q))
-            return Project(await episodes.GetRecentAsync(limit, ct), query, limit);
+        {
+            // Paged in SQL rather than by fetching everything and discarding it — this is the whole
+            // catalog, and a client catching up asks for the far end of it. The projection is then told
+            // Offset 0, because the skipping already happened.
+            var recent = await episodes.GetRecentAsync(query.Offset, limit, ct);
+
+            return new ReleasePage(
+                Project(recent, query with { Offset = 0 }, limit),
+                query.Offset,
+                await episodes.CountAsync(ct));
+        }
 
         var matches = Project(await episodes.SearchAsync(query.Q!, ct), query, limit);
         if (matches.Count > 0 || resolver is null)
-            return matches;
+            return ReleasePage.Last(matches, query.Offset);
 
         // Nothing in the catalog. Ask the broadcasters, waiting only for the configured deadline — the
         // crawl continues in the background either way, so a later call gets the full set.
         if (await resolver.EnsureResolvedAsync(query.Q!, ct))
-            return Project(await episodes.SearchAsync(query.Q!, ct), query, limit);
+            return ReleasePage.Last(Project(await episodes.SearchAsync(query.Q!, ct), query, limit),
+                query.Offset);
 
         // The deadline passed with the crawl still running. Return empty rather than an error: Sonarr
         // treats indexer errors as an availability problem and will disable an indexer that keeps failing,
         // so "no results yet" has to stay distinguishable from "broken".
-        return matches;
+        return ReleasePage.Last(matches, query.Offset);
     }
 
     private static List<Release> Project(IReadOnlyList<Episode> found, SearchReleasesQuery query, int limit)
@@ -123,7 +159,7 @@ public class SearchReleasesHandler(
                 filtered = filtered.Where(e => e.EpisodeNumber == query.Episode);
         }
 
-        return filtered.Take(limit).Select(ReleaseMapper.ToRelease).ToList();
+        return filtered.Skip(query.Offset).Take(limit).Select(ReleaseMapper.ToRelease).ToList();
     }
 
     /// <summary>
@@ -160,6 +196,7 @@ public class SearchReleasesHandler(
         }
 
         return filtered
+            .Skip(query.Offset)
             .Take(limit)
             .Select(numbered => ReleaseMapper.ToRelease(numbered.Episode) with
             {

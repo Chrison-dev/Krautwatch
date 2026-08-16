@@ -32,9 +32,12 @@ public class DailySearchTests
         SeasonNumber = season, EpisodeNumber = number,
     };
 
-    private Task<IReadOnlyList<Release>> Search(SearchReleasesQuery query)
+    private async Task<IReadOnlyList<Release>> Search(SearchReleasesQuery query)
     {
-        return new SearchReleasesHandler(_episodes).HandleAsync(query, TestContext.Current.CancellationToken);
+        var page = await new SearchReleasesHandler(_episodes)
+            .HandleAsync(query, TestContext.Current.CancellationToken);
+
+        return page.Releases;
     }
 
     private void GivenHeuteShow()

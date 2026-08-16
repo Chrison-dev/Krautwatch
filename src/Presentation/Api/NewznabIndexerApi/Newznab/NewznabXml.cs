@@ -36,14 +36,27 @@ public static class NewznabXml
                 new XElement("category",
                     new XAttribute("id", NewznabCategory.Movies), new XAttribute("name", "Movies")))));
 
-    public static string Feed(IReadOnlyList<Release> releases, Func<Release, string> downloadUrl) =>
+    /// <summary>
+    /// The RSS document Sonarr polls.
+    /// </summary>
+    /// <remarks>
+    /// The <c>newznab:response</c> element is what makes paging work: it tells a client where the page
+    /// it just received starts and how many results exist in total, which is how it knows whether to
+    /// ask for more and when to stop. Without it a client catching up after downtime has to guess —
+    /// and before #12 there was nothing to guess with, because <c>offset</c> was ignored outright and
+    /// every page came back as page one.
+    /// </remarks>
+    public static string Feed(ReleasePage page, Func<Release, string> downloadUrl) =>
         Doc(new XElement("rss",
             new XAttribute("version", "2.0"),
             new XAttribute(XNamespace.Xmlns + "newznab", Nz.NamespaceName),
             new XElement("channel",
                 new XElement("title", "Krautwatch"),
                 new XElement("description", "German public-TV Newznab indexer"),
-                releases.Select(r => Item(r, downloadUrl(r))))));
+                new XElement(Nz + "response",
+                    new XAttribute("offset", page.Offset),
+                    new XAttribute("total", page.Total)),
+                page.Releases.Select(r => Item(r, downloadUrl(r))))));
 
     private static XElement Item(Release r, string url)
     {
