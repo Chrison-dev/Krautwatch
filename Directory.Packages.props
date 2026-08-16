@@ -78,7 +78,12 @@
 
   <ItemGroup Label="Testing">
     <PackageVersion Include="Microsoft.NET.Test.Sdk"     Version="18.8.1" />
-    <PackageVersion Include="Testcontainers.PostgreSql"  Version="4.13.0" />
+    <!-- 4.14.0 is the first release off SSH.NET 2026.0.0, which patches GHSA-q939-rpr3-3284
+         (high: recursive ScpClient download writes arbitrary files from server-controlled
+         names). SSH.NET arrives here only as a Testcontainers transitive, so bumping the
+         parent is the fix — pinning the transitive would leave us guessing what Testcontainers
+         tested against. -->
+    <PackageVersion Include="Testcontainers.PostgreSql"  Version="4.14.0" />
     <PackageVersion Include="xunit.v3"                   Version="3.2.2" />
     <PackageVersion Include="xunit.runner.visualstudio"  Version="3.1.5" />
     <PackageVersion Include="Shouldly"                   Version="4.3.0" />
