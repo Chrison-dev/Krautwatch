@@ -53,9 +53,10 @@ public static class NewznabEndpoints
         int? tvdbid,
         string? apikey,
         int? limit,
+        int? offset,
         CancellationToken ct) =>
         string.IsNullOrEmpty(http.Request.Query["mode"])
-            ? HandleApiAsync(http, search, config, t, q, season, ep, tvdbid, apikey, limit, ct)
+            ? HandleApiAsync(http, search, config, t, q, season, ep, tvdbid, apikey, limit, offset, ct)
             : SabnzbdEndpoints.HandleAsync(http, config, add, queue, cancel, settings, ct);
 
     private static async Task<IResult> HandleApiAsync(
@@ -71,6 +72,7 @@ public static class NewznabEndpoints
         int? tvdbid,
         string? apikey,
         int? limit,
+        int? offset,
         CancellationToken ct)
     {
         switch (t?.ToLowerInvariant())
@@ -82,12 +84,12 @@ public static class NewznabEndpoints
             case "tvsearch":
                 if (!ApiKeyGuard.IsAuthorized(config, apikey)) return Denied();
 
-                var releases = await search.HandleAsync(
-                    ToQuery(q, season, ep, limit, tvdbid), ct);
+                var page = await search.HandleAsync(
+                    ToQuery(q, season, ep, limit, offset, tvdbid), ct);
 
                 var baseUrl = $"{http.Request.Scheme}://{http.Request.Host}";
                 var key = ApiKeyGuard.Configured(config);
-                return Xml(NewznabXml.Feed(releases, r =>
+                return Xml(NewznabXml.Feed(page, r =>
                 {
                     // The release name rides along so the NZB, its filename and the file the download
                     // client writes all carry it — that name is what Sonarr's importer parses.
@@ -140,7 +142,7 @@ public static class NewznabEndpoints
     /// than looking the show up — see <see cref="NewznabEpisodeQuery"/>.
     /// </summary>
     private static SearchReleasesQuery ToQuery(
-        string? q, string? season, string? ep, int? limit, int? tvdbid)
+        string? q, string? season, string? ep, int? limit, int? offset, int? tvdbid)
     {
         var parsed = NewznabEpisodeQuery.Parse(season, ep);
 
@@ -149,6 +151,9 @@ public static class NewznabEndpoints
             Season: parsed.Season,
             Episode: parsed.Episode,
             Limit: limit ?? 100,
+            // Negative offsets are clamped rather than rejected: an indexer that 400s mid-catch-up is
+            // one Sonarr starts treating as unavailable.
+            Offset: Math.Max(0, offset ?? 0),
             TvdbId: tvdbid,
             AirDate: parsed.AirDate,
             SeasonOnly: parsed.IsSeasonOnly);

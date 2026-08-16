@@ -85,7 +85,7 @@ public class SearchReleasesHandlerTests
         repo.SearchAsync("heute-show", Arg.Any<CancellationToken>())
             .Returns(new[] { Ep("zdf:doc-1", SeriesType.Daily, null, null) });
 
-        var releases = await new SearchReleasesHandler(repo).HandleAsync(new SearchReleasesQuery("heute-show"), TestContext.Current.CancellationToken);
+        var releases = (await new SearchReleasesHandler(repo).HandleAsync(new SearchReleasesQuery("heute-show"), TestContext.Current.CancellationToken)).Releases;
 
         var release = releases.ShouldHaveSingleItem();
         release.Guid.ShouldBe("zdf:doc-1");
@@ -98,10 +98,10 @@ public class SearchReleasesHandlerTests
     public async Task Empty_query_reads_the_recent_feed()
     {
         var repo = Substitute.For<Krautwatch.Domain.Interfaces.IEpisodeRepository>();
-        repo.GetRecentAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+        repo.GetRecentAsync(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(new[] { Ep("zdf:doc-9", SeriesType.Daily, null, null) });
 
-        var releases = await new SearchReleasesHandler(repo).HandleAsync(new SearchReleasesQuery(Q: null), TestContext.Current.CancellationToken);
+        var releases = (await new SearchReleasesHandler(repo).HandleAsync(new SearchReleasesQuery(Q: null), TestContext.Current.CancellationToken)).Releases;
 
         releases.ShouldHaveSingleItem().Guid.ShouldBe("zdf:doc-9");
         await repo.DidNotReceive().SearchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
@@ -117,8 +117,9 @@ public class SearchReleasesHandlerTests
             Ep("kika:2", SeriesType.Standard, 2, 52, "Die Biene Maja"),
         });
 
-        var releases = await new SearchReleasesHandler(repo)
-            .HandleAsync(new SearchReleasesQuery("Die Biene Maja", Season: 2, Episode: 52), TestContext.Current.CancellationToken);
+        var releases = (await new SearchReleasesHandler(repo)
+            .HandleAsync(new SearchReleasesQuery("Die Biene Maja", Season: 2, Episode: 52),
+                TestContext.Current.CancellationToken)).Releases;
 
         var release = releases.ShouldHaveSingleItem();
         release.Guid.ShouldBe("kika:2");
