@@ -193,12 +193,15 @@ dotnet fallout Test      # same thing via the tool, which is what CI invokes
 
 `develop` is the **default branch and integration trunk**; `main` is production and is the only branch
 tagged `v*`. Work goes `feat|fix|chore|docs/*` → PR into `develop`. A release is `develop` (or a
-`release/*` window) rebase-merged into `main`, then tagged. `hotfix/*` is cut from `main` and **must**
+`release/*` window) **fast-forwarded** into `main`, then tagged. `hotfix/*` is cut from `main` and **must**
 be ported back to `develop`.
 
 - Every non-docs push to `develop` republishes the images as `:edge` (`PushEdge`).
 - `GitHubRelease` **refuses** a tag that is not reachable from `main` or `support/*` — the trunk is
   never tagged for release.
+- **Never merge a release PR with GitHub's button.** It rewrites the commits, which severs the
+  commit→PR link the generated release notes are built from (v0.3.0 lost two entries that way).
+  Advance `main` with `git merge --ff-only develop && git push origin main`.
 - Full model in [`docs/branching-and-release.md`](docs/branching-and-release.md), pipeline in
   [`docs/ci.md`](docs/ci.md), runbooks in [`docs/releasing.md`](docs/releasing.md).
 

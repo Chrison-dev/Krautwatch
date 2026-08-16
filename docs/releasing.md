@@ -65,7 +65,7 @@ flowchart TD
     B -->|Yes| D["Cut release/X.Y.Z from develop"]
     D --> E["Fixes only, on the release branch"]
     E --> F["PR release/X.Y.Z → main"]
-    C --> G["Rebase-merge into main"]
+    C --> G["Fast-forward main"]
     F --> G
     G --> H["Tag main"]
     H --> I["publish-ghcr + publish-release fire"]
@@ -77,8 +77,11 @@ flowchart TD
 ```bash
 git switch develop && git pull --ff-only
 gh pr create --base main --title "Release v0.3.0" --label skip-changelog
-# merge with REBASE (see below), then:
+
+# once the gate is green, advance main by FAST-FORWARD — not the merge button:
 git switch main && git pull --ff-only
+git merge --ff-only develop
+git push origin main                       # this also marks the release PR merged
 git tag v0.3.0 && git push origin v0.3.0
 ```
 
@@ -96,16 +99,19 @@ git switch -c release/0.3.0 develop
 git push -u origin release/0.3.0
 # … fixes land here by PR; feature work continues on develop …
 gh pr create --base main
-# merge, tag as above, then port the stabilisation commits back:
+# fast-forward main onto release/0.3.0 and tag, as above, then port the fixes back:
 git switch -c chore/port-0.3.0 develop
 git cherry-pick <fix-sha>…
 gh pr create --base develop --label skip-changelog
 ```
 
-> **Merge with rebase, not squash, into `main`.** Squashing collapses a whole release into one
-> commit, losing the per-change history on the production branch — and the release notes are
-> generated from the PRs that make it up. Reasoning and the one edge case in
-> [branching-and-release.md](branching-and-release.md#merging).
+A `release/*` branch is cut from `develop`, so `main` fast-forwards onto it the same way. What does
+*not* fast-forward is `develop` afterwards — hence the cherry-pick.
+
+> **Do not use GitHub's merge button on a release PR.** It rewrites the commits even when the merge
+> is a pure fast-forward, and the release notes are built from the commit→PR link that rewriting
+> severs — v0.3.0 lost two entries to exactly this. Push a fast-forward instead. Reasoning and the
+> hotfix-divergence case in [branching-and-release.md](branching-and-release.md#merging).
 
 > **"Merge back to develop" is a cherry-pick or a second PR here**, not a literal merge. GitFlow
 > assumes merge commits; this repo enforces linear history. The effect is the same — the fix must
@@ -170,7 +176,10 @@ Rehearse the whole thing without publishing anything:
 ## Release notes are the PR labels
 
 There is no `CHANGELOG.md`. The notes are generated from merged PRs grouped by label, so improving
-them is a matter of labelling PRs rather than writing release prose twice. One category label per
+them is a matter of labelling PRs rather than writing release prose twice. That generation walks the
+commits in the release and asks GitHub which PR each came from — which is why `main` must
+[fast-forward](branching-and-release.md#why-main-advances-by-fast-forward-and-not-by-the-merge-button)
+rather than be rewritten. One category label per
 PR (`enhancement`, `bug`, `breaking-change`, `security`, `documentation`, `dependencies`), or
 `skip-changelog` for housekeeping.
 
