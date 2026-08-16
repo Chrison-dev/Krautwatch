@@ -364,8 +364,11 @@ Domain  ←  Application  ←  Infrastructure
 Wolverine is the mediator + bus + transactional outbox (**Postgres transport** by default — durable,
 no extra container; RabbitMQ opt-in for scale-out).
 
-Each host is an independently deployable microservice. **Adding a broadcaster** = a new Application
-slice + an Infrastructure HTTP client + a `Presentation/Agents/<Broadcaster>` host.
+Each host is an independently deployable microservice. **Adding a broadcaster** = an Infrastructure
+HTTP client + an `IBroadcasterCrawler` adapter + a `Presentation/Agents/<Broadcaster>` host. The
+`Application/Crawling` slice is shared and broadcaster-agnostic — it selects a crawler by provider
+key and never learns their names. Walkthrough:
+[`docs/adding-a-broadcaster.md`](docs/adding-a-broadcaster.md).
 
 Decision records live in [`docs/architecture/`](docs/architecture/). The current ones are
 **[DR-009](docs/architecture/DR-009-architecture-reset.md)** (architecture reset),
@@ -419,8 +422,9 @@ dotnet ef migrations add <Name> --project src/Infrastructure --context AppDbCont
 
 ## Contributing
 
-The repo runs **GitFlow**: `develop` is the default branch and the integration trunk, `main` is what
-is released, and every release is a `v*` tag on `main`.
+Start with [`CONTRIBUTING.md`](CONTRIBUTING.md). The repo runs **GitFlow**: `develop` is the default
+branch and the integration trunk, `main` is what is released, and every release is a `v*` tag on
+`main`.
 
 ```bash
 git switch develop && git pull --ff-only
@@ -429,6 +433,8 @@ git switch -c feat/my-change
 gh pr create --base develop --label enhancement      # one category label — the labels are the changelog
 ```
 
+- [`docs/adding-a-broadcaster.md`](docs/adding-a-broadcaster.md) — the walkthrough for a new
+  Mediathek: HTTP client → `IBroadcasterCrawler` adapter → agent host, with the traps called out
 - [`docs/branching-and-release.md`](docs/branching-and-release.md) — the branch model, where a fix
   belongs, protection and merge methods
 - [`docs/ci.md`](docs/ci.md) — what CI runs and why there is no hand-written YAML here
