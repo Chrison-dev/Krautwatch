@@ -149,32 +149,58 @@ release needs pushing through by hand.
 
 ## Merging
 
-Linear history is enforced on every protected branch, so merge commits are out. Which of the two
-remaining methods to use depends on the direction:
+Linear history is enforced on every protected branch, so merge commits are out. Which method to use
+depends on the direction:
 
 | Merging | Method | Why |
 |---|---|---|
 | `feat/*` → `develop` | **Squash** | Working branches accumulate WIP. One commit per landed change keeps the trunk readable. |
-| `develop` → `main` | **Rebase** | Squashing would collapse an entire release into a single commit on the production branch, losing the per-change history — and the release notes are generated from the PRs that make it up. |
-| `release/*` → `main` | **Rebase** | Same, and the individual stabilisation commits are what you cherry-pick back to `develop`. |
-| `hotfix/*` → `main` | **Rebase** | Same — you need a real commit to port back. |
+| `develop` → `main` | **Fast-forward**, pushed locally | Preserves the exact commits — see below. Squash would collapse a whole release into one commit, and GitHub's *Rebase and merge* rewrites them. |
+| `release/*` → `main` | **Fast-forward** | Same, and the individual stabilisation commits are what you cherry-pick back to `develop`. |
+| `hotfix/*` → `main` | **Squash** (PR) | `main` is the base, so nothing downstream depends on the SHA; the port-back to `develop` is a cherry-pick of it. |
 | anything → `develop` (port-back) | **Squash** | It's a working branch like any other. |
 
-GitHub can't enforce a method per branch, so this is discipline rather than configuration. Both
-methods stay enabled because both are correct somewhere.
+GitHub can't enforce a method per branch, so this is discipline rather than configuration.
 
-### Why rebase across two long-lived branches is safe
+### Why `main` advances by fast-forward and not by the merge button
 
-Rebase-merge rewrites commits, so `main` never becomes an ancestor of `develop` — and once a hotfix
-has landed on `main` and been ported back, the merge base falls behind both. The obvious worry is
-that the *next* release would try to replay commits already present on `main`.
+**Release notes are generated from the PRs behind the commits in a release**, so anything that
+rewrites those commits severs the link. GitHub's *Rebase and merge* rewrites unconditionally — even
+when the merge is a pure fast-forward — and the rewritten commits on `main` then belong to the
+release PR rather than to the PRs that did the work.
 
-It doesn't. `git rebase` detects already-applied commits by patch-id and drops them, so a second
-release replays only the genuinely new work.
+That is not hypothetical: v0.3.0 shipped with two PRs missing from its notes for exactly this
+reason, and they had to be added by hand.
 
-The edge case to know: if a port-back was **conflict-resolved differently** from the original, its
-patch no longer matches and rebase will try to apply it again. That surfaces as a conflict at
-release time — visible and fixable, not silent.
+A fast-forward keeps the SHAs, so every PR keeps its association and the notes come out right:
+
+```bash
+git switch main && git pull --ff-only
+git merge --ff-only develop
+git push origin main            # GitHub marks the release PR merged automatically
+```
+
+The release PR still exists — it is what runs CI and what you review. It is just merged by pushing
+rather than by clicking.
+
+### Keeping the fast-forward available
+
+A fast-forward only works while `main` is a strict ancestor of `develop`. Two things preserve that:
+
+- **Never push to `main` outside a release.** It only ever moves forward onto commits that are
+  already on the trunk.
+- **After a hotfix, `main` and `develop` diverge** — `main` has the squashed fix, `develop` has the
+  cherry-picked twin. `git rebase` drops the duplicate by patch-id, so `git rebase origin/main
+  develop` reconciles them, but it rewrites `develop`'s unreleased commits and costs those PRs
+  their note entries.
+
+  The cheaper answer for a single-maintainer repo: hotfixes are rare, so **reconcile immediately
+  after the hotfix** — while `develop` has few or no unreleased commits of its own, the rewrite
+  costs nothing. Waiting until release time is what makes it expensive.
+
+  The edge case to know either way: if the port-back was **conflict-resolved differently** from the
+  original, its patch no longer matches and the rebase tries to apply it again. That surfaces as a
+  conflict — visible and fixable, not silent.
 
 ### The double merge-back
 

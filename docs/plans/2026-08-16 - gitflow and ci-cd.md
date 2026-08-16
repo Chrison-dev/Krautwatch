@@ -84,6 +84,27 @@ currently imply PRs target `main`.
 
 ## Then: cut v0.3.0
 
-The first release through the new path. `develop` → `main` by rebase-merge, tag `v0.3.0` on `main`,
+The first release through the new path. `develop` → `main`, tag `v0.3.0` on `main`,
 which fires `publish-ghcr` and `publish-release`. Minor bump because subtitle download (#20) is a
 new user-facing capability; the rest of the batch is fixes.
+
+## Outcome (2026-08-16)
+
+Done, and proven rather than assumed:
+
+- The trunk push published all six multi-arch images to `:edge` in **8m30s**; the docs-only push
+  that followed correctly published nothing, so the path filter works.
+- **v0.3.0** went out with `:0.3.0` images (amd64 + arm64) and a release carrying
+  `docker-compose.yaml` + `env.example`.
+- Rulesets applied to `develop`/`main`/`support/*` and to `v*` tags; default branch switched; merge
+  commits disabled.
+
+**One thing the first release taught us.** Its notes were missing #101 and #103. GitHub's *Rebase
+and merge* rewrites commits even for a pure fast-forward, so `main`'s copies were associated with
+the release PR (`skip-changelog`) instead of the PRs that did the work, and the generated notes
+dropped them. Fixed by advancing `main` with a **fast-forward push** instead — documented in
+[branching-and-release.md](../branching-and-release.md#merging) — after a one-off realignment of
+`develop` onto `main`'s SHAs so the two share ancestry again. v0.3.0's notes were amended by hand.
+
+The lesson generalises: **anything that rewrites commits between `develop` and `main` costs the
+release its changelog**, because the changelog is derived from the commit→PR link and nothing else.
