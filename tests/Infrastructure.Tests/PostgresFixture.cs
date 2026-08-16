@@ -46,6 +46,28 @@ public sealed class PostgresFixture : IAsyncLifetime
 
         return options;
     }
+
+    /// <summary>
+    /// Options bound to a fresh database with <b>no schema</b>, for tests that drive the migrations
+    /// themselves.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="CreateDatabaseAsync"/> uses <c>EnsureCreated</c>, which builds the schema from the
+    /// current model and skips migrations entirely — so nothing in the suite would otherwise execute
+    /// a migration, and one that only fails against an existing database (a type change needing a
+    /// <c>USING</c> cast, say) would first fail on somebody's install.
+    /// </remarks>
+    public DbContextOptions<AppDbContext> CreateUnmigratedDatabase()
+    {
+        var builder = new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
+        {
+            Database = "kwm_" + Guid.NewGuid().ToString("N"),
+        };
+
+        return new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql(builder.ConnectionString)
+            .Options;
+    }
 }
 
 /// <summary>

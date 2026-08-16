@@ -1,6 +1,7 @@
 using Krautwatch.Domain.Entities;
 using Krautwatch.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 // using TickerQ.Utilities.EntityFramework.Configurations; // TODO: Add proper TickerQ reference
 
 namespace Krautwatch.Infrastructure.Persistence;
@@ -19,6 +20,43 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ResolvedQuery> ResolvedQueries => Set<ResolvedQuery>();
     public DbSet<ShowMapping> ShowMappings => Set<ShowMapping>();
     public DbSet<ImportedShowHint> ImportedShowHints => Set<ImportedShowHint>();
+
+    /// <summary>
+    /// Normalizes every <see cref="DateTimeOffset"/> to UTC on the way to the database.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Timestamps used to be persisted as ISO-8601 text — a SQLite-era workaround (#50) that outlived
+    /// SQLite's removal. They are now native (<c>timestamptz</c> on Postgres, <c>datetimeoffset</c> on
+    /// SQL Server), which makes the indexes real and the ordering an ordering of instants rather than
+    /// of strings that happen to sort correctly while every writer uses the same offset.
+    /// </para>
+    /// <para>
+    /// Npgsql accepts a <c>DateTimeOffset</c> for <c>timestamptz</c> <b>only with a zero offset</b>, and
+    /// not every value here is ours to control: broadcast dates are <c>DateTimeOffset.Parse</c>d out of
+    /// ARD/ZDF JSON, where a German <c>+02:00</c> is entirely normal. Converting at the persistence
+    /// boundary rather than in each crawler means no future writer can reintroduce the problem — and
+    /// UTC is what the column stores either way, so nothing is lost.
+    /// </para>
+    /// </remarks>
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<DateTimeOffset>()
+            .HaveConversion<UtcDateTimeOffsetConverter>();
+
+        configurationBuilder.Properties<DateTimeOffset?>()
+            .HaveConversion<NullableUtcDateTimeOffsetConverter>();
+    }
+
+    private sealed class UtcDateTimeOffsetConverter()
+        : ValueConverter<DateTimeOffset, DateTimeOffset>(
+            write => write.ToUniversalTime(),
+            read => read.ToUniversalTime());
+
+    private sealed class NullableUtcDateTimeOffsetConverter()
+        : ValueConverter<DateTimeOffset?, DateTimeOffset?>(
+            write => write.HasValue ? write.Value.ToUniversalTime() : null,
+            read => read.HasValue ? read.Value.ToUniversalTime() : null);
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -68,18 +106,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Title).IsRequired().HasMaxLength(500);
             e.Property(x => x.Description).HasMaxLength(5000);
 
-            // Store as ISO 8601 TEXT to avoid EF Core 10 DateTimeOffset/SQLite REAL ambiguity
-            // See: DR-007 notes on EF Core 10 breaking changes
-            e.Property(x => x.BroadcastDate)
-                .HasConversion(
-                    v => v.ToString("O"),
-                    v => DateTimeOffset.Parse(v));
+            // BroadcastDate and AvailableUntil map natively (timestamptz on Postgres,
+            // datetimeoffset on SQL Server) — see the note on ConfigureConventions.
 
-            e.Property(x => x.AvailableUntil)
-                .HasConversion(
-                    v => v.HasValue ? v.Value.ToString("O") : null,
-                    v => v != null ? DateTimeOffset.Parse(v) : (DateTimeOffset?)null);
-
+            // Duration stays a numeric count of seconds, deliberately. Postgres has `interval`,
+            // but SQL Server does not: EF maps TimeSpan there to `time`, which caps at 24 hours
+            // and would silently mangle anything longer. Nothing filters or orders on Duration in
+            // SQL, so the native type would buy nothing and cost us the second provider.
             e.Property(x => x.Duration)
                 .HasConversion(
                     v => v.TotalSeconds,
@@ -136,20 +169,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Status)
                 .HasConversion(v => v.ToString(), v => Enum.Parse<DownloadStatus>(v));
 
-            e.Property(x => x.CreatedAt)
-                .HasConversion(
-                    v => v.ToString("O"),
-                    v => DateTimeOffset.Parse(v));
-
-            e.Property(x => x.StartedAt)
-                .HasConversion(
-                    v => v.HasValue ? v.Value.ToString("O") : null,
-                    v => v != null ? DateTimeOffset.Parse(v) : (DateTimeOffset?)null);
-
-            e.Property(x => x.CompletedAt)
-                .HasConversion(
-                    v => v.HasValue ? v.Value.ToString("O") : null,
-                    v => v != null ? DateTimeOffset.Parse(v) : (DateTimeOffset?)null);
+            // CreatedAt / StartedAt / CompletedAt map natively. CreatedAt in particular *must*:
+            // it is the tiebreaker in the atomic FIFO claim below, and ordering a real timestamp
+            // is ordering an instant rather than a string that happens to sort correctly.
 
             e.HasOne(x => x.Episode)
                 .WithMany()
@@ -183,13 +205,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.AnonymityLevel).HasMaxLength(20);
             e.Property(x => x.VerifiedEgressCountry).HasMaxLength(10);
 
-            foreach (var ts in new[] { nameof(Proxy.SourceLastChecked), nameof(Proxy.LastProbedAt) })
-                e.Property<DateTimeOffset?>(ts).HasConversion(
-                    v => v.HasValue ? v.Value.ToString("O") : null,
-                    v => v != null ? DateTimeOffset.Parse(v) : (DateTimeOffset?)null);
-
-            foreach (var ts in new[] { nameof(Proxy.CreatedAt), nameof(Proxy.UpdatedAt) })
-                e.Property<DateTimeOffset>(ts).HasConversion(v => v.ToString("O"), v => DateTimeOffset.Parse(v));
+            // SourceLastChecked / LastProbedAt / CreatedAt / UpdatedAt map natively.
 
             e.Ignore(x => x.Url); // computed from Protocol/Host/Port
             e.HasIndex(x => x.Country);
