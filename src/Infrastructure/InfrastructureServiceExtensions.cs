@@ -124,11 +124,31 @@ public static class InfrastructureServiceExtensions
     /// Registers the ZDF crawler behind the <see cref="IBroadcasterCrawler"/> port, plus the typed
     /// <see cref="ZdfCatalogClient"/> HTTP client. Wired by the ZDF agent host.
     /// </summary>
-    public static IServiceCollection AddZdfCrawler(this IServiceCollection services)
+    /// <param name="configuration">
+    /// Bound from the <c>Zdf</c> section (#13) — chiefly <c>ApiAuthKey</c>, so a rotated key is a
+    /// config change rather than a rebuild. Optional: omitting it keeps the shipped default.
+    /// </param>
+    /// <remarks>
+    /// Also registers a health check reporting a rejected key. It lives here rather than in each host
+    /// so that every host wiring the ZDF client reports the condition — the alternative is a Newznab
+    /// API that resolves ZDF on demand, fails every time, and looks perfectly healthy doing it.
+    /// </remarks>
+    public static IServiceCollection AddZdfCrawler(
+        this IServiceCollection services,
+        IConfiguration? configuration = null)
     {
+        var options = new ZdfOptions();
+        configuration?.GetSection(ZdfOptions.SectionName).Bind(options);
+
+        services.AddSingleton(options);
+        services.AddSingleton<ZdfAuthState>();
         services.AddHttpClient<ZdfCatalogClient>();
         services.AddScoped<IBroadcasterCrawler>(sp =>
             new ZdfBroadcasterCrawler(sp.GetRequiredService<ZdfCatalogClient>()));
+
+        services.AddHealthChecks()
+            .AddCheck<ZdfAuthHealthCheck>("zdf-auth", tags: ["ready"]);
+
         return services;
     }
 
