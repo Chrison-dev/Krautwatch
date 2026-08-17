@@ -20,6 +20,9 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="TngTech.ArchUnitNET" />
     <PackageReference Include="Shouldly" />
+    <!-- The agent-composition specs stub Wolverine's IMessageBus so the graph can validate (#116). -->
+    <PackageReference Include="NSubstitute" />
+    <PackageReference Include="WolverineFx" />
   </ItemGroup>
 
 </Project>

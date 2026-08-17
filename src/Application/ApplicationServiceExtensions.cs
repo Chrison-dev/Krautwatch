@@ -66,9 +66,10 @@ public static class ApplicationServiceExtensions
 
         // Crawling — the Action handled by the broadcaster agents (Wolverine-discovered)
         services.AddScoped<CrawlShowHandler>();
-        // Resolved per cycle by the scheduler, and only when Crawl:PreWarmFromArrInstances is on. Its
-        // IArrClient dependency comes from AddArrClient(), which a host wires only if it wants this.
-        services.AddScoped<PreWarmCrawlTargetsHandler>();
+        // PreWarmCrawlTargetsHandler is deliberately NOT registered here: its IArrClient comes from
+        // AddArrClient(), which only a host opting into pre-warm wires up. Registering it
+        // unconditionally makes every agent fail ValidateOnBuild over a service nothing resolves
+        // (#116). It is registered next to AddArrClient() in the agent hosts instead.
 
         // Indexing — the Newznab read side
         services.AddScoped<SearchReleasesHandler>();
