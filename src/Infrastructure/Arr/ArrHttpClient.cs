@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Text.Json;
 using Krautwatch.Domain.Entities;
+using Krautwatch.Domain.Enums;
 using Krautwatch.Domain.Interfaces;
 using Microsoft.Extensions.Logging;
 
@@ -22,6 +23,8 @@ public class ArrHttpClient(HttpClient http, ISecretResolver secrets, ILogger<Arr
     : IArrClient
 {
     private const string StatusPath = "api/v3/system/status";
+    private const string SeriesPath = "api/v3/series";
+    private const string MoviePath = "api/v3/movie";
 
     public async Task<ArrConnectionResult> TestConnectionAsync(
         ArrInstance instance,
@@ -141,10 +144,105 @@ public class ArrHttpClient(HttpClient http, ISecretResolver secrets, ILogger<Arr
     }
 
     /// <summary>
+    /// What the instance is monitoring — Sonarr's series, Radarr's movies (#6).
+    /// </summary>
+    /// <remarks>
+    /// Every failure path returns an empty list and logs, because the caller is an optional pre-warm of
+    /// the crawl list. Throwing would let an *arr instance being down take a crawl cycle with it, which
+    /// is precisely the dependency DR-011 says must not exist.
+    /// </remarks>
+    public async Task<IReadOnlyList<ArrMonitoredItem>> GetMonitoredAsync(
+        ArrInstance instance,
+        CancellationToken ct = default)
+    {
+        var path = instance.Kind == ArrKind.Radarr ? MoviePath : SeriesPath;
+
+        if (!TryBuildUri(instance.BaseUrl, path, out var uri))
+        {
+            logger.LogWarning("Instance '{Name}' has an unusable base URL '{BaseUrl}' — skipping its " +
+                "monitored list.", instance.Name, instance.BaseUrl);
+            return [];
+        }
+
+        var apiKey = secrets.Resolve(instance.ApiKey);
+        if (apiKey.Origin == SecretOrigin.Unresolved)
+        {
+            logger.LogWarning("Instance '{Name}': {Problem} — skipping its monitored list.",
+                instance.Name, apiKey.Problem);
+            return [];
+        }
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+            request.Headers.TryAddWithoutValidation("X-Api-Key", apiKey.Value);
+
+            using var response = await http.SendAsync(request, ct);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning("Instance '{Name}' answered {Status} for {Uri} — skipping its " +
+                    "monitored list.", instance.Name, (int)response.StatusCode, uri);
+                return [];
+            }
+
+            using var doc = await JsonDocument.ParseAsync(
+                await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                logger.LogWarning("Instance '{Name}' answered {Uri} with something that is not a list.",
+                    instance.Name, uri);
+                return [];
+            }
+
+            var monitored = new List<ArrMonitoredItem>();
+
+            foreach (var item in doc.RootElement.EnumerateArray())
+            {
+                // Unmonitored series are in the same response — they are exactly what we don't want to
+                // spend broadcaster requests on.
+                if (!item.TryGetProperty("monitored", out var isMonitored)
+                    || isMonitored.ValueKind != JsonValueKind.True)
+                    continue;
+
+                if (!item.TryGetProperty("title", out var title)
+                    || title.ValueKind != JsonValueKind.String
+                    || string.IsNullOrWhiteSpace(title.GetString()))
+                    continue;
+
+                // Radarr keys on TMDB, so only Sonarr contributes an id a ShowMapping can resolve.
+                int? tvdbId = item.TryGetProperty("tvdbId", out var id)
+                    && id.ValueKind == JsonValueKind.Number
+                    && id.TryGetInt32(out var parsed)
+                    && parsed > 0
+                    ? parsed
+                    : null;
+
+                monitored.Add(new ArrMonitoredItem(title.GetString()!.Trim(), tvdbId));
+            }
+
+            logger.LogInformation("Instance '{Name}' is monitoring {Count} title(s).",
+                instance.Name, monitored.Count);
+
+            return monitored;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Could not read the monitored list from '{Name}'.", instance.Name);
+            return [];
+        }
+    }
+
+    /// <summary>
     /// Builds the status URL, preserving any subpath in the configured base URL — instances behind a
     /// reverse proxy are commonly served from something like <c>https://host/sonarr</c>.
     /// </summary>
-    internal static bool TryBuildStatusUri(string baseUrl, out Uri uri)
+    internal static bool TryBuildStatusUri(string baseUrl, out Uri uri) =>
+        TryBuildUri(baseUrl, StatusPath, out uri);
+
+    /// <summary>Resolves <paramref name="path"/> against the configured base URL.</summary>
+    private static bool TryBuildUri(string baseUrl, string path, out Uri uri)
     {
         uri = null!;
         if (string.IsNullOrWhiteSpace(baseUrl)
@@ -155,6 +253,6 @@ public class ArrHttpClient(HttpClient http, ISecretResolver secrets, ILogger<Arr
         // A trailing slash matters to Uri's relative resolution: without it the last path segment would be
         // replaced rather than appended, silently dropping the subpath.
         var basePath = parsed.AbsoluteUri.EndsWith('/') ? parsed.AbsoluteUri : parsed.AbsoluteUri + "/";
-        return Uri.TryCreate(new Uri(basePath), StatusPath, out uri!);
+        return Uri.TryCreate(new Uri(basePath), path, out uri!);
     }
 }

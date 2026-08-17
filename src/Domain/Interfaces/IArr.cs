@@ -23,7 +23,29 @@ public interface IArrInstanceRepository
 public interface IArrClient
 {
     Task<ArrConnectionResult> TestConnectionAsync(ArrInstance instance, CancellationToken ct = default);
+
+    /// <summary>
+    /// What this instance is monitoring — Sonarr's series, Radarr's movies (#6).
+    /// </summary>
+    /// <remarks>
+    /// Returns an empty list rather than throwing when the instance is unreachable or refuses the key.
+    /// This feeds an <i>optional</i> pre-warm of the standing crawl list, so an instance being down has
+    /// to cost the operator nothing beyond a log line — never a failed crawl cycle, and never an
+    /// emptied list.
+    /// </remarks>
+    Task<IReadOnlyList<ArrMonitoredItem>> GetMonitoredAsync(
+        ArrInstance instance, CancellationToken ct = default);
 }
+
+/// <summary>
+/// One monitored thing in an <c>*arr</c> instance, reduced to what a crawl target needs.
+/// </summary>
+/// <param name="Title">The title as the <c>*arr</c> knows it — the query when there is no mapping.</param>
+/// <param name="TvdbId">
+/// Sonarr's TVDB id, which <see cref="ShowMapping"/> can resolve straight to one of our shows. Null for
+/// Radarr, which keys on TMDB — those match by title or not at all.
+/// </param>
+public readonly record struct ArrMonitoredItem(string Title, int? TvdbId);
 
 /// <summary>
 /// Outcome of a connectivity test. Failure modes are distinguished deliberately: "it doesn't work" is
