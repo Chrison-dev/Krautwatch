@@ -32,6 +32,12 @@ builder.Configuration.GetSection(CrawlOptions.SectionName).Bind(crawlOptions);
 if (crawlOptions.Targets.Count == 0)
     crawlOptions.Targets = [new CrawlTarget("zdf", "heute-show")];
 builder.Services.AddSingleton(crawlOptions);
+
+// Pre-warming from Sonarr/Radarr (#6) needs the outbound *arr client, and only then — an agent that
+// does not opt in carries no reach-back at all, which is DR-011's requirement rather than an oversight.
+if (crawlOptions.PreWarmFromArrInstances)
+    builder.Services.AddArrClient();
+
 builder.Services.AddHostedService<CrawlSchedulerService>();
 
 // Durable Wolverine (Postgres transport) — the shared message store with the API + other agents.

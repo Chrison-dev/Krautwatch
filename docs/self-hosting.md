@@ -268,8 +268,27 @@ cannot resolve on demand. That list is config-driven per agent, and defaults to 
       Crawl__Targets__0__ShowQuery: "heute-show"
 ```
 
-`ProviderKey` is `ard`, `kika` (both on `agent-ard`) or `zdf`. Pre-warming this list from your `*arr`
-monitored series is [#6](https://github.com/Chrison-dev/Krautwatch/issues/6) and optional by design.
+`ProviderKey` is `ard`, `kika` (both on `agent-ard`) or `zdf`.
+
+**Or let Sonarr write the list for you.** Turn on pre-warming and each agent adds whatever your
+configured `*arr` instances monitor to its own standing list:
+
+```yaml
+  agent-zdf:
+    environment:
+      Crawl__PreWarmFromArrInstances: "true"
+      Crawl__PreWarmMaxTargets: "50"
+```
+
+Additive by design — anything in `Crawl__Targets` stays, and an instance that is down or rejects its
+API key costs a log line rather than a crawl cycle. Nothing here is required: searching works with no
+`*arr` instance configured at all, because search resolves on demand.
+
+A monitored series that already has a show mapping resolves to exactly one target on the right
+broadcaster. An unmapped one is tried by title against each broadcaster that agent serves, which
+corrects itself once a grab creates the mapping. Raise `PreWarmMaxTargets` if you monitor a lot and
+see the "keeping the first N" warning — but bear in mind each target is a broadcaster search every
+interval.
 
 ---
 

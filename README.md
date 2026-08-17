@@ -194,10 +194,24 @@ ARD/KiKA; `heute-show` on ZDF):
       { "ProviderKey": "ard",  "ShowQuery": "Extra 3" },
       { "ProviderKey": "kika", "ShowQuery": "Biene Maja" },
       { "ProviderKey": "zdf",  "ShowQuery": "heute-show" }
-    ]
+    ],
+
+    // Optional (#6): also crawl whatever your Sonarr/Radarr instances monitor, so the feed covers
+    // what you actually watch without curating the list above by hand. Purely additive — Targets is
+    // always honoured, and an instance being unreachable costs a log line, nothing more.
+    "PreWarmFromArrInstances": false,
+    "PreWarmMaxTargets": 50
   }
 }
 ```
+
+**How pre-warm picks a broadcaster.** A monitored series with a show mapping resolves to exactly one
+target, because a mapping names the broadcaster as well as the show. An *unmapped* one is tried by
+title against each broadcaster the agent serves — a miss costs one search, and it corrects itself as
+soon as a grab creates the mapping. A series mapped to a broadcaster this agent doesn't serve is left
+to the agent that does. The cap exists because 200 monitored series across two broadcasters is 400
+searches an interval; when it bites, mapped shows are kept ahead of title guesses and the number
+dropped is logged.
 
 ### If ZDF stops returning anything
 

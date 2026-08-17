@@ -243,6 +243,99 @@ public class ArrHttpClientTests
             await Client(handler).TestConnectionAsync(Instance(), cts.Token));
     }
 
+    // ── monitored list (#6) ───────────────────────────────────
+
+    [Fact]
+    public async Task Reads_monitored_series_from_Sonarr_and_skips_the_rest()
+    {
+        var handler = StubHandler.Json(
+            """
+            [
+              {"title":"Extra 3","tvdbId":12345,"monitored":true},
+              {"title":"Unmonitored Show","tvdbId":6789,"monitored":false},
+              {"title":"Die Sendung mit der Maus","tvdbId":222,"monitored":true}
+            ]
+            """);
+
+        var monitored = await Client(handler).GetMonitoredAsync(
+            Instance(), TestContext.Current.CancellationToken);
+
+        // The unmonitored ones come back in the same response, and are exactly what we must not spend
+        // broadcaster searches on.
+        monitored.ShouldBe([
+            new ArrMonitoredItem("Extra 3", 12345),
+            new ArrMonitoredItem("Die Sendung mit der Maus", 222),
+        ]);
+
+        handler.LastRequest!.RequestUri!.AbsolutePath.ShouldBe("/api/v3/series");
+        handler.LastRequest.Headers.GetValues("X-Api-Key").ShouldHaveSingleItem().ShouldBe("key-abc");
+    }
+
+    [Fact]
+    public async Task Reads_monitored_movies_from_Radarr_which_carries_no_TVDB_id()
+    {
+        var handler = StubHandler.Json("""[{"title":"Ein Film","tmdbId":550,"monitored":true}]""");
+        var radarr = new ArrInstance
+        {
+            Name = "Radarr", Kind = ArrKind.Radarr, BaseUrl = "http://radarr:7878", ApiKey = "key-abc",
+        };
+
+        var monitored = await Client(handler).GetMonitoredAsync(
+            radarr, TestContext.Current.CancellationToken);
+
+        handler.LastRequest!.RequestUri!.AbsolutePath.ShouldBe("/api/v3/movie");
+
+        // Radarr keys on TMDB, so there is no id a ShowMapping could resolve — title matching or nothing.
+        monitored.ShouldHaveSingleItem().ShouldBe(new ArrMonitoredItem("Ein Film", null));
+    }
+
+    [Fact]
+    public async Task A_subpath_in_the_base_url_is_preserved()
+    {
+        var handler = StubHandler.Json("[]");
+
+        await Client(handler).GetMonitoredAsync(
+            Instance("https://host/sonarr"), TestContext.Current.CancellationToken);
+
+        handler.LastRequest!.RequestUri!.AbsolutePath.ShouldBe("/sonarr/api/v3/series");
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.NotFound)]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    public async Task An_instance_that_refuses_yields_nothing_rather_than_throwing(HttpStatusCode status)
+    {
+        // This feeds an optional pre-warm, so an instance being down or misconfigured has to cost a log
+        // line — never a failed crawl cycle (DR-011).
+        var monitored = await Client(StubHandler.Status(status)).GetMonitoredAsync(
+            Instance(), TestContext.Current.CancellationToken);
+
+        monitored.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task An_unreachable_instance_yields_nothing_rather_than_throwing()
+    {
+        var handler = StubHandler.Throws(new HttpRequestException("no route to host"));
+
+        var monitored = await Client(handler).GetMonitoredAsync(
+            Instance(), TestContext.Current.CancellationToken);
+
+        monitored.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Something_that_is_not_an_arr_yields_nothing_rather_than_throwing()
+    {
+        var handler = StubHandler.Text("<html>hello</html>");
+
+        var monitored = await Client(handler).GetMonitoredAsync(
+            Instance(), TestContext.Current.CancellationToken);
+
+        monitored.ShouldBeEmpty();
+    }
+
     // ── stub ──────────────────────────────────────────────────
 
     private sealed class StubHandler : HttpMessageHandler
