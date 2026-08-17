@@ -47,11 +47,17 @@ public class CrawlOptions
 /// <see cref="CrawlOptions.Interval"/>. Dispatch goes through the <see cref="IMessageDispatcher"/>
 /// port, so the scheduler carries no transport dependency (DR-009 §5). Hosted by each agent.
 /// </summary>
+/// <remarks>
+/// Everything it needs from the container is resolved <b>inside a scope, per cycle</b>. A
+/// <see cref="BackgroundService"/> is a singleton, and both the dispatcher and the repositories behind
+/// the pre-warm are scoped — injecting them directly fails scope validation outright in Development,
+/// and in Production silently pins a scoped service to the root provider for the process lifetime
+/// (#116).
+/// </remarks>
 public class CrawlSchedulerService(
-    IMessageDispatcher dispatcher,
+    IServiceScopeFactory scopes,
     CrawlOptions options,
-    ILogger<CrawlSchedulerService> logger,
-    IServiceScopeFactory? scopes = null) : BackgroundService
+    ILogger<CrawlSchedulerService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -65,25 +71,34 @@ public class CrawlSchedulerService(
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            // Recomposed every cycle rather than at startup, so a show newly monitored in Sonarr is
-            // picked up on the next pass instead of at the next restart.
-            foreach (var target in await TargetsForThisCycleAsync(stoppingToken))
-            {
-                try
-                {
-                    await dispatcher.PublishAsync(
-                        new CrawlShowCommand(target.ProviderKey, target.ShowQuery), stoppingToken);
-                    logger.LogInformation("Scheduled crawl '{Show}' on {Provider}.",
-                        target.ShowQuery, target.ProviderKey);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    logger.LogError(ex, "Failed to schedule crawl '{Show}' on {Provider}.",
-                        target.ShowQuery, target.ProviderKey);
-                }
-            }
+            await RunCycleAsync(stoppingToken);
 
             if (!await DelayAsync(options.Interval, stoppingToken)) return;
+        }
+    }
+
+    private async Task RunCycleAsync(CancellationToken stoppingToken)
+    {
+        await using var scope = scopes.CreateAsyncScope();
+
+        var dispatcher = scope.ServiceProvider.GetRequiredService<IMessageDispatcher>();
+
+        // Recomposed every cycle rather than at startup, so a show newly monitored in Sonarr is
+        // picked up on the next pass instead of at the next restart.
+        foreach (var target in await TargetsForThisCycleAsync(scope.ServiceProvider, stoppingToken))
+        {
+            try
+            {
+                await dispatcher.PublishAsync(
+                    new CrawlShowCommand(target.ProviderKey, target.ShowQuery), stoppingToken);
+                logger.LogInformation("Scheduled crawl '{Show}' on {Provider}.",
+                    target.ShowQuery, target.ProviderKey);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "Failed to schedule crawl '{Show}' on {Provider}.",
+                    target.ShowQuery, target.ProviderKey);
+            }
         }
     }
 
@@ -96,22 +111,21 @@ public class CrawlSchedulerService(
     /// not silently shrink the standing list. A pre-warm failure of any kind leaves exactly the
     /// behaviour of a deployment that never enabled it.
     /// </remarks>
-    private async Task<IReadOnlyList<CrawlTarget>> TargetsForThisCycleAsync(CancellationToken ct)
+    private async Task<IReadOnlyList<CrawlTarget>> TargetsForThisCycleAsync(
+        IServiceProvider services, CancellationToken ct)
     {
-        if (!options.PreWarmFromArrInstances || scopes is null)
+        if (!options.PreWarmFromArrInstances)
             return options.Targets;
 
         try
         {
-            // A scope per cycle: the repositories and the *arr client are scoped, and this is a
-            // singleton hosted service.
-            await using var scope = scopes.CreateAsyncScope();
-
-            var preWarm = scope.ServiceProvider.GetRequiredService<PreWarmCrawlTargetsHandler>();
+            // Registered by the host only when pre-warm is on, which is the same condition guarding
+            // this call — see the agents' Program.cs (#116).
+            var preWarm = services.GetRequiredService<PreWarmCrawlTargetsHandler>();
 
             // The host's own crawlers are the authority on which providers it can serve — a target for
             // any other is dropped by the handler on arrival.
-            var providerKeys = scope.ServiceProvider
+            var providerKeys = services
                 .GetServices<IBroadcasterCrawler>()
                 .Select(c => c.ProviderKey)
                 .Distinct(StringComparer.OrdinalIgnoreCase)

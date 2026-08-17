@@ -39,8 +39,13 @@ builder.Services.AddSingleton(crawlOptions);
 
 // Pre-warming from Sonarr/Radarr (#6) needs the outbound *arr client, and only then — an agent that
 // does not opt in carries no reach-back at all, which is DR-011's requirement rather than an oversight.
+// The handler is registered here rather than in AddApplication() for the same reason: with no
+// IArrClient registered, its descriptor fails ValidateOnBuild even though nothing resolves it (#116).
 if (crawlOptions.PreWarmFromArrInstances)
+{
     builder.Services.AddArrClient();
+    builder.Services.AddScoped<PreWarmCrawlTargetsHandler>();
+}
 
 builder.Services.AddHostedService<CrawlSchedulerService>();
 
