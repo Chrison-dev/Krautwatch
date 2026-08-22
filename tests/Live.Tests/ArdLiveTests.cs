@@ -23,6 +23,38 @@ public class ArdLiveTests
     private static ArdCatalogClient Client => new(Http);
 
     [Fact]
+    public async Task A_show_with_more_episodes_than_the_page_embeds_is_walked_past_the_slice()
+    {
+        // tagesschau carries widgets in the four figures while the page response embeds a few dozen —
+        // the silent truncation #9 is about. Asserted against the cap rather than an exact count,
+        // because ARD's catalog changes daily.
+        var client = new ArdCatalogClient(Http, new ArdOptions { PageSize = 100, MaxEpisodesPerShow = 250 });
+
+        var show = await client.FindShowAsync("tagesschau", ct: TestContext.Current.CancellationToken);
+        show.ShouldNotBeNull();
+
+        var episodes = await client.GetFullEpisodesAsync(show, TestContext.Current.CancellationToken);
+
+        // More than any single page response embeds, and never past the ceiling we set.
+        episodes.Count.ShouldBeGreaterThan(100);
+        episodes.Count.ShouldBeLessThanOrEqualTo(250);
+        episodes.Select(e => e.Id).ShouldBeUnique();
+    }
+
+    [Fact]
+    public async Task The_cap_is_honoured_against_the_live_catalog()
+    {
+        var client = new ArdCatalogClient(Http, new ArdOptions { PageSize = 20, MaxEpisodesPerShow = 40 });
+
+        var show = await client.FindShowAsync("tagesschau", ct: TestContext.Current.CancellationToken);
+        show.ShouldNotBeNull();
+
+        var episodes = await client.GetFullEpisodesAsync(show, TestContext.Current.CancellationToken);
+
+        episodes.Count.ShouldBeLessThanOrEqualTo(40);
+    }
+
+    [Fact]
     public async Task Search_finds_Extra3_on_ARD()
     {
         var show = await Client.FindShowAsync("Extra 3", ct: TestContext.Current.CancellationToken);

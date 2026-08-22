@@ -205,6 +205,18 @@ ARD/KiKA; `heute-show` on ZDF):
 }
 ```
 
+**How deep a crawl goes.** ARD lists episodes in paged widgets, and a page response embeds only a
+slice of a large one — tagesschau has widgets in the four figures. Krautwatch walks the pages rather
+than reading the slice, capped per show, because every listed episode costs an item-page fetch on
+every cycle:
+
+```jsonc
+{ "Ard": { "PageSize": 100, "MaxEpisodesPerShow": 200 } }
+```
+
+Listings are newest-first, so the cap keeps the part an indexer wants and drops the archive; raise it
+for deeper history at the cost of a longer crawl. The agent logs whenever a cap truncates a show.
+
 **How pre-warm picks a broadcaster.** A monitored series with a show mapping resolves to exactly one
 target, because a mapping names the broadcaster as well as the show. An *unmapped* one is tried by
 title against each broadcaster the agent serves — a miss costs one search, and it corrects itself as

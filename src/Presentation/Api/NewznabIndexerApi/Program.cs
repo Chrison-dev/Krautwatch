@@ -36,7 +36,7 @@ builder.Configuration.GetSection(OnDemandResolutionOptions.SectionName).Bind(res
 
 if (resolutionOptions.Enabled)
 {
-    builder.Services.AddArdCrawlers(); // ARD + KiKA
+    builder.Services.AddArdCrawlers(builder.Configuration); // ARD + KiKA
     builder.Services.AddZdfCrawler(builder.Configuration);
     builder.Services.AddOnDemandResolution(resolutionOptions);
 }

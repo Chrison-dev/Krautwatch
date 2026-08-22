@@ -108,8 +108,18 @@ public static class InfrastructureServiceExtensions
     /// Registers the ARD-platform crawlers (regular ARD + KiKA) behind the <see cref="IBroadcasterCrawler"/>
     /// port, plus the typed <see cref="ArdCatalogClient"/> HTTP client. Wired by the ARD agent host.
     /// </summary>
-    public static IServiceCollection AddArdCrawlers(this IServiceCollection services)
+    /// <param name="configuration">
+    /// Bound from the <c>Ard</c> section (#9) — page size and the per-show episode ceiling. Optional:
+    /// omitting it keeps the defaults.
+    /// </param>
+    public static IServiceCollection AddArdCrawlers(
+        this IServiceCollection services,
+        IConfiguration? configuration = null)
     {
+        var options = new ArdOptions();
+        configuration?.GetSection(ArdOptions.SectionName).Bind(options);
+
+        services.AddSingleton(options);
         services.AddHttpClient<ArdCatalogClient>();
         services.AddScoped<IBroadcasterCrawler>(sp =>
             new ArdBroadcasterCrawler(sp.GetRequiredService<ArdCatalogClient>(),
