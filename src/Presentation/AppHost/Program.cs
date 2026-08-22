@@ -84,7 +84,7 @@ builder.AddProject<Projects.Krautwatch_Api_NewznabIndexerApi>("newznab")
     .WithExternalHttpEndpoints();
 
 // Standalone UI — search / download / monitor without a Sonarr/Radarr instance (Blazor Server).
-builder.AddProject<Projects.Krautwatch_Web>("web")
+var web = builder.AddProject<Projects.Krautwatch_Web>("web")
     .WithHttpEndpoint(port: 5099, targetPort: 8080, name: "http")
     .WithReference(db)
     .WaitFor(db)
@@ -111,7 +111,7 @@ builder.AddProject<Projects.Krautwatch_Agents_Zdf>("agent-zdf")
 // point downloads at a writable temp dir. In compose it is the bind mount below.
 var devDownloadDir = Path.Combine(Path.GetTempPath(), "krautwatch-downloads");
 
-builder.AddProject<Projects.Krautwatch_Agents_Downloader>("agent-downloader")
+var downloader = builder.AddProject<Projects.Krautwatch_Agents_Downloader>("agent-downloader")
     .WithHttpEndpoint(targetPort: 8080, name: "http")
     .WithEnvironment("Download__Directory", devDownloadDir)
     .WithReference(db).WaitFor(db).WaitForCompletion(migrator)
@@ -139,6 +139,11 @@ builder.AddProject<Projects.Krautwatch_Agents_Downloader>("agent-downloader")
         // if someone swaps the base image.
         service.Environment["Download__RequireFfmpeg"] = "true";
     });
+
+// The setup wizard asks the downloader whether it can write to the configured directory (#100). Only
+// the downloader mounts the media, so the Web host has to ask rather than look. Declared here because
+// the reference needs the downloader resource, which is defined above.
+web.WithReference(downloader);
 
 // ──────────────────────────────────────────────────────────────
 // Observability (opt-in via launch profile "observability")
