@@ -23,7 +23,7 @@ builder.Services.AddInfrastructure(new DbProviderOptions
 builder.Services.AddApplication();
 
 // ARD + KiKA crawlers behind the IBroadcasterCrawler port.
-builder.Services.AddArdCrawlers();
+builder.Services.AddArdCrawlers(builder.Configuration);
 builder.Services.AddMessageDispatcher(); // Wolverine dispatch for the scheduler (this host has Wolverine)
 
 // Crawl schedule — bound from the "Crawl" config section; seeded with the shows proven live (PR #34).
