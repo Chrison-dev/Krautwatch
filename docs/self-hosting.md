@@ -364,6 +364,20 @@ docker compose logs -f agent-downloader
 The Aspire dashboard on `:18888` collects logs and traces from every service in one place, which is
 usually faster than chasing `docker compose logs` per container.
 
+### The wizard says the downloader cannot write to the download directory
+
+That check runs inside the downloader — the only service that mounts your media — and it writes a real
+file to be sure, so it is telling you something true. Two shapes:
+
+- *"cannot see /downloads"* — the volume is not mounted into the downloader. Check
+  `KRAUTWATCH_DOWNLOADS` and the container's mounts.
+- *"exists but the downloader cannot write to it"* — the mount is read-only, or owned by a user the
+  container is not running as.
+
+If it says it could not reach the downloader at all, that service is simply not running yet, which is
+normal partway through first-run setup. Nothing checks the other half — that your `*arr` apps see the
+same path — so mount the same host directory into Sonarr at the same path.
+
 ### Sonarr says "No files are eligible for import"
 
 The single most common failure, and almost always storage rather than Krautwatch:

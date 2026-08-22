@@ -4,8 +4,10 @@
 @inject IServiceScopeFactory Scopes
 @inject NavigationManager Nav
 @inject IConfiguration Config
+@inject Krautwatch.Web.Services.DownloaderDiagnostics DownloaderDiagnostics
 @using Krautwatch.Application.Settings
 @using Krautwatch.Domain.Enums
+@using Krautwatch.Infrastructure.Downloads
 
 @* First-run wizard, steps 3-6 (#54). Steps 1-2 — what this is, and creating the administrator — live on
    /setup, which is anonymous and gated on the startup token. They stay there deliberately: that page is
@@ -74,11 +76,23 @@
                         <span class="muted small">Per downloader process.</span>
                     </label>
 
+                    <button type="button" class="secondary" @onclick="CheckDirectoryAsync"
+                            disabled="@_checkingDirectory">
+                        @(_checkingDirectory ? "Checking…" : "Check the directory")
+                    </button>
+
+                    @if (_directoryCheck is { } check)
+                    {
+                        <p class="@(check.Writable ? "ok" : "error") small" role="status">
+                            @(check.Writable ? "✓" : "✕") @check.Message
+                        </p>
+                    }
+
                     <p class="muted small">
-                        <strong>This path is not checked here.</strong> Only the downloader service mounts
-                        your media — the web service deliberately cannot reach it, so a check from this
-                        page would fail even when your setup is correct. What matters is that the
-                        downloader and your <code>*arr</code> apps see this same path.
+                        The check runs <strong>in the downloader</strong>, which is the only service that
+                        mounts your media, and writes a file there to be sure. It cannot check the other
+                        half: that your <code>*arr</code> apps see this same path. Mount the same host
+                        directory into Sonarr at the same path and they will.
                     </p>
                     break;
 
@@ -185,6 +199,8 @@
     string _egressProxyUrl = "";
     bool _egressListEnabled;
     string? _error;
+    bool _checkingDirectory;
+    DownloadDirectoryStatus? _directoryCheck;
 
     SetupStep Current =>
         Enum.TryParse<SetupStep>(Step, ignoreCase: true, out var parsed) && Steps.Contains(parsed)
@@ -233,6 +249,25 @@
     }
 
     void Go(SetupStep step) => Nav.NavigateTo($"setup/{step}");
+
+    /// <summary>
+    /// Asks the downloader whether it can write to the path currently in the box — before it is saved,
+    /// so a wrong path is caught here rather than at the first import.
+    /// </summary>
+    async Task CheckDirectoryAsync()
+    {
+        _checkingDirectory = true;
+        _directoryCheck = null;
+
+        try
+        {
+            _directoryCheck = await DownloaderDiagnostics.CheckDirectoryAsync(_downloadDirectory);
+        }
+        finally
+        {
+            _checkingDirectory = false;
+        }
+    }
 
     async Task<bool> SaveDownloadsAsync()
     {

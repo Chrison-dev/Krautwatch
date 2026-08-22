@@ -15,6 +15,15 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
+// The setup wizard's download-directory check (#100). Service discovery resolves "agent-downloader"
+// in the dev fleet and on the compose network; a short timeout because a button must not hang on a
+// downloader that is not running yet — the common case during first-run setup.
+builder.Services.AddHttpClient<Krautwatch.Web.Services.DownloaderDiagnostics>(http =>
+{
+    http.BaseAddress = new Uri("http://agent-downloader");
+    http.Timeout = TimeSpan.FromSeconds(8);
+});
+
 // Load the static-web-assets manifest explicitly. The framework only does this in Development, and none of
 // our hosts run as Development (there are no launch profiles, and Aspire does not set one), so
 // _framework/blazor.web.js returned a 500 and compressed assets returned an empty 200 — the UI loaded

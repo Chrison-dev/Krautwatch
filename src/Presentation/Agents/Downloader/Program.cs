@@ -3,6 +3,7 @@ using Krautwatch.Application.Downloads;
 using Krautwatch.Domain.Interfaces;
 using Krautwatch.Domain.Options;
 using Krautwatch.Infrastructure;
+using Krautwatch.Infrastructure.Downloads;
 
 // Krautwatch Downloader agent (DR-009). Polls the durable job table for Queued downloads and pulls
 // each stream to disk (raw progressive MP4) via the Application download Action.
@@ -28,6 +29,7 @@ builder.Configuration.GetSection(EgressProxyOptions.SectionName).Bind(egressOpti
 builder.Services.AddSingleton(egressOptions);
 builder.Services.AddSingleton(egressOptions.ProxyList);
 
+builder.Services.AddSingleton<DownloadDirectoryProbe>(); // the setup wizard's writability check (#100)
 builder.Services.AddDownloadProvider();                 // the raw-MP4 / ffmpeg download engines
 builder.Services.AddEgressProxy();                      // geo-restricted egress selector
 builder.Services.AddScoped<RunDownloadHandler>();       // the Action — needs IDownloadProvider (this host only)
@@ -58,5 +60,24 @@ if (app.Configuration["Download:Directory"] is { Length: > 0 } directory)
 }
 
 app.MapDefaultEndpoints(); // /health, /alive from ServiceDefaults
+
+// The setup wizard's "can you write there?" check (#100). It lives here because this is the only
+// service that mounts the media — the Web host deliberately does not, so it has to ask.
+//
+// `path` is optional: the wizard passes what the operator has just typed, so they can test a path
+// before saving it; without it we answer for the directory in force. Reachable only on the compose
+// network — the downloader publishes no external endpoint.
+app.MapGet("/diagnostics/download-directory", async (
+    DownloadDirectoryProbe probe,
+    ISettingsRepository settings,
+    string? path,
+    CancellationToken ct) =>
+{
+    var target = string.IsNullOrWhiteSpace(path)
+        ? (await settings.GetAsync(ct)).DownloadDirectory
+        : path;
+
+    return Results.Ok(probe.Check(target));
+});
 
 app.Run();
